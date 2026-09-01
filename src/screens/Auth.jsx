@@ -47,16 +47,19 @@ export function AuthScreen({ onDone, onGuest }) {
   return (
     <div style={{ padding: "40px 24px", maxWidth: 420, margin: "0 auto" }}>
       <div style={{ textAlign: "center", marginBottom: 32 }}>
-        <div
-          style={{
-            fontFamily: FONT_DISPLAY,
-            fontSize: 34,
-            fontWeight: 600,
-            color: C.pine,
-            letterSpacing: -0.5,
-          }}
-        >
-          flicklet
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+          <img src="/favicon.png" alt="" style={{ width: 40, height: 40 }} />
+          <div
+            style={{
+              fontFamily: FONT_DISPLAY,
+              fontSize: 34,
+              fontWeight: 600,
+              color: C.pine,
+              letterSpacing: -0.5,
+            }}
+          >
+            flicklet
+          </div>
         </div>
         <div style={{ fontFamily: FONT_BODY, fontSize: 14, color: C.inkSoft, marginTop: 4 }}>
           Evcil dostların sosyal evi

@@ -24,7 +24,7 @@ export function DiscoverScreen({ session, userId, myName, onOpenProfile, onOpenC
     };
   }, [refreshKey, userId]);
 
-  const scored = posts.slice().sort((a, b) => b.likeCount - a.likeCount);
+  const scored = posts.filter((p) => p.imageUrl).sort((a, b) => b.likeCount - a.likeCount);
   const shown =
     filter === "Tümü" ? scored : filter === "En Beğenilenler" ? scored.slice(0, 4) : scored.filter((p) => p.contest === filter);
 

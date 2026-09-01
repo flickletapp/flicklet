@@ -26,15 +26,18 @@ export function CreatePostScreen({ myPets, session, userId, onPublish, onCancel 
   };
 
   const publish = async () => {
-    if (!file || !caption || !selectedPet) return;
+    if (!caption) return;
     setError("");
     setPublishing(true);
     try {
-      const path = `${userId}/${Date.now()}-${file.name}`;
-      const imageUrl = await supabaseUploadImage(path, file, session.access_token);
+      let imageUrl = null;
+      if (file) {
+        const path = `${userId}/${Date.now()}-${file.name}`;
+        imageUrl = await supabaseUploadImage(path, file, session.access_token);
+      }
       const inserted = await supabaseInsert("posts", session.access_token, {
         author_id: userId,
-        pet_id: selectedPet.id,
+        pet_id: selectedPet?.id || null,
         caption,
         image_url: imageUrl,
         contest_category: contestOn ? category : null,
@@ -76,7 +79,7 @@ export function CreatePostScreen({ myPets, session, userId, onPublish, onCancel 
           {!previewUrl && (
             <>
               <Camera size={30} color={C.mustard} />
-              <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: C.inkSoft }}>Fotoğraf eklemek için dokun</div>
+              <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: C.inkSoft }}>Fotoğraf eklemek için dokun (isteğe bağlı)</div>
             </>
           )}
         </div>
@@ -93,7 +96,7 @@ export function CreatePostScreen({ myPets, session, userId, onPublish, onCancel 
             {myPets.map((p) => (
               <button
                 key={p.id || p.name}
-                onClick={() => setSelectedPetId(p.id)}
+                onClick={() => setSelectedPetId((cur) => (cur === p.id ? "" : p.id))}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -210,7 +213,7 @@ export function CreatePostScreen({ myPets, session, userId, onPublish, onCancel 
           </div>
         )}
 
-        <PrimaryButton style={{ width: "100%" }} disabled={!caption || !selectedPet || !file || publishing} onClick={publish}>
+        <PrimaryButton style={{ width: "100%" }} disabled={!caption || publishing} onClick={publish}>
           {publishing ? "Paylaşılıyor..." : "Paylaş"}
         </PrimaryButton>
       </div>

@@ -1,16 +1,19 @@
-import { useEffect, useState } from "react";
-import { Lock, Globe, Plus } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Lock, Globe, Plus, Camera } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../theme";
 import { TopBar, BlobAvatar } from "../components/ui";
 import { FollowListModal } from "../components/modals";
 import { MOCK_FOLLOWERS } from "../mockData";
-import { supabaseUpdate, supabaseCount, supabaseSelect } from "../lib/supabaseClient";
+import { supabaseUpdate, supabaseCount, supabaseSelect, supabaseUploadImage } from "../lib/supabaseClient";
 
 export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsPrivate, onOpenProfile }) {
   const [listOpen, setListOpen] = useState(null);
   const [dmPolicy, setDmPolicy] = useState("everyone");
   const [counts, setCounts] = useState({ followers: 0, following: 0, posts: 0 });
   const [myPosts, setMyPosts] = useState([]);
+  const [avatarUrl, setAvatarUrl] = useState(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef(null);
 
   useEffect(() => {
     if (!userId) return;
@@ -24,7 +27,26 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
     supabaseSelect("posts", session?.access_token, `select=id,image_url,caption&author_id=eq.${userId}&order=created_at.desc`)
       .then(setMyPosts)
       .catch(() => {});
+    supabaseSelect("profiles", session?.access_token, `select=avatar_url&id=eq.${userId}`)
+      .then((rows) => setAvatarUrl(rows[0]?.avatar_url || null))
+      .catch(() => {});
   }, [userId]);
+
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !userId) return;
+    setUploadingAvatar(true);
+    try {
+      const path = `avatars/${userId}/${Date.now()}-${file.name}`;
+      const url = await supabaseUploadImage(path, file, session.access_token);
+      await supabaseUpdate("profiles", session.access_token, `id=eq.${userId}`, { avatar_url: url });
+      setAvatarUrl(url);
+    } catch (e) {
+      // sessiz geç
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   const togglePrivate = async () => {
     const next = !isPrivate;
@@ -41,10 +63,40 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
       <TopBar title="Profilim" />
       <div style={{ padding: "20px 18px 90px", maxWidth: 480, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
-          <BlobAvatar emoji="🙂" size={64} color={C.pine} />
+          <input ref={avatarInputRef} type="file" accept="image/*" onChange={handleAvatarChange} style={{ display: "none" }} />
+          <div onClick={() => avatarInputRef.current?.click()} style={{ position: "relative", cursor: "pointer" }}>
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt="Profil fotoğrafı"
+                style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", border: `2px solid ${C.pine}`, display: "block" }}
+              />
+            ) : (
+              <BlobAvatar emoji="🙂" size={64} color={C.pine} />
+            )}
+            <div
+              style={{
+                position: "absolute",
+                bottom: -2,
+                right: -2,
+                width: 22,
+                height: 22,
+                borderRadius: "50%",
+                background: C.mustard,
+                border: `2px solid ${C.paper}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Camera size={11} color={C.cream} />
+            </div>
+          </div>
           <div>
             <div style={{ fontFamily: FONT_DISPLAY, fontSize: 18, color: C.ink }}>{user.name || "Sen"}</div>
-            <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: C.inkSoft }}>{myPets.length} dost</div>
+            <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: C.inkSoft }}>
+              {uploadingAvatar ? "Fotoğraf yükleniyor..." : `${myPets.length} dost`}
+            </div>
           </div>
         </div>
 
@@ -130,11 +182,34 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
           </div>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-            {myPosts.map((p) => (
-              <div key={p.id} style={{ aspectRatio: "1 / 1", borderRadius: 12, overflow: "hidden" }}>
-                <img src={p.image_url} alt={p.caption} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              </div>
-            ))}
+            {myPosts.map((p) =>
+              p.image_url ? (
+                <div key={p.id} style={{ aspectRatio: "1 / 1", borderRadius: 12, overflow: "hidden" }}>
+                  <img src={p.image_url} alt={p.caption} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                </div>
+              ) : (
+                <div
+                  key={p.id}
+                  style={{
+                    aspectRatio: "1 / 1",
+                    borderRadius: 12,
+                    background: C.cream,
+                    border: `1px solid ${C.line}`,
+                    padding: 8,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    textAlign: "center",
+                    fontFamily: FONT_BODY,
+                    fontSize: 11,
+                    color: C.inkSoft,
+                    overflow: "hidden",
+                  }}
+                >
+                  {p.caption}
+                </div>
+              )
+            )}
           </div>
         )}
       </div>

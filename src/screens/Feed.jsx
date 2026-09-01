@@ -164,7 +164,9 @@ export function PostCard({ post, session, userId, myName, onOpenComplaint, onOpe
         </div>
       </div>
 
-      <img src={post.imageUrl} alt={post.caption} style={{ width: "100%", maxHeight: 420, objectFit: "contain", display: "block", background: C.paper }} />
+      {post.imageUrl && (
+        <img src={post.imageUrl} alt={post.caption} style={{ width: "100%", maxHeight: 420, objectFit: "contain", display: "block", background: C.paper }} />
+      )}
 
       <div style={{ padding: "12px 14px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 10 }}>
@@ -207,9 +209,13 @@ export function PostCard({ post, session, userId, myName, onOpenComplaint, onOpe
             </button>
           )}
         </div>
-        <div style={{ fontFamily: FONT_BODY, fontSize: 13.5, color: C.ink, lineHeight: 1.4 }}>
-          <span style={{ fontWeight: 800 }}>{post.pet}</span> — {post.caption}
-        </div>
+        {post.imageUrl ? (
+          <div style={{ fontFamily: FONT_BODY, fontSize: 13.5, color: C.ink, lineHeight: 1.4 }}>
+            <span style={{ fontWeight: 800 }}>{post.pet}</span> — {post.caption}
+          </div>
+        ) : (
+          <div style={{ fontFamily: FONT_BODY, fontSize: 16, color: C.ink, lineHeight: 1.5 }}>{post.caption}</div>
+        )}
       </div>
 
       {showComments && (
