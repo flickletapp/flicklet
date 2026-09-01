@@ -4,7 +4,7 @@ import { C, FONT_DISPLAY, FONT_BODY } from "../theme";
 import { TopBar, BlobAvatar, PawBadge } from "../components/ui";
 import { CommentsModal } from "../components/modals";
 import { TRENDING } from "../mockData";
-import { supabaseSelect, supabaseInsert, supabaseUpsert, supabaseDelete, supabaseCount } from "../lib/supabaseClient";
+import { supabaseSelect, supabaseInsert, supabaseUpsert, supabaseDelete, supabaseCount } from "../lib/supabase/client";
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../theme";
 import { TopBar, BlobAvatar } from "../components/ui";
-import { supabaseSelect } from "../lib/supabaseClient";
+import { supabaseSelect } from "../lib/supabase/client";
 
 async function loadConversations(session, userId) {
   const rows = await supabaseSelect(

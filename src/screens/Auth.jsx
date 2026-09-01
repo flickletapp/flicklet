@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../theme";
 import { TextField, PrimaryButton } from "../components/ui";
-import { supabaseSignUp, supabaseSignIn } from "../lib/supabaseClient";
+import { supabaseSignUp, supabaseSignIn } from "../lib/supabase/client";
 
 export function AuthScreen({ onDone, onGuest }) {
   const [mode, setMode] = useState("signup"); // signup | verify | login

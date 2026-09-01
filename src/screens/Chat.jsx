@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Send } from "lucide-react";
 import { C, FONT_BODY } from "../theme";
 import { TopBar, BlobAvatar } from "../components/ui";
-import { supabaseSelect, supabaseInsert, supabaseUpdate } from "../lib/supabaseClient";
+import { supabaseSelect, supabaseInsert, supabaseUpdate } from "../lib/supabase/client";
 
 export function ChatScreen({ conversation, session, userId, onBack }) {
   const [messages, setMessages] = useState([]);

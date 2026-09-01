@@ -4,7 +4,7 @@ import { C, FONT_DISPLAY, FONT_BODY } from "../theme";
 import { TopBar, BlobAvatar } from "../components/ui";
 import { FollowListModal } from "../components/modals";
 import { MOCK_FOLLOWERS } from "../mockData";
-import { supabaseSelect, supabaseInsert, supabaseDelete, supabaseCount } from "../lib/supabaseClient";
+import { supabaseSelect, supabaseInsert, supabaseDelete, supabaseCount } from "../lib/supabase/client";
 
 export function UserProfileView({ target, session, userId, onBack, onOpenProfile, onOpenChat, isGuest, onRequireAuth }) {
   const [following, setFollowing] = useState(false);

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { C, FONT_BODY } from "./theme";
-import { supabaseGetUser, supabaseSelect } from "./lib/supabaseClient";
+import { supabaseGetUser, supabaseSelect } from "./lib/supabase/client";
 
 const SESSION_KEY = "flicklet_session";
 import { AuthScreen } from "./screens/Auth";

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../theme";
 import { BlobAvatar, PrimaryButton } from "./ui";
-import { supabaseSelect, supabaseInsert } from "../lib/supabaseClient";
+import { supabaseSelect, supabaseInsert } from "../lib/supabase/client";
 
 export function FollowListModal({ title, list, onClose, onOpenProfile }) {
   return (
