@@ -25,11 +25,38 @@ export function CreatePostScreen({ myPets, session, userId, onPublish, onCancel 
     setPreviewUrl(URL.createObjectURL(f));
   };
 
+  const fileToDataUrl = (f) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(f);
+    });
+
   const publish = async () => {
     if (!caption) return;
     setError("");
     setPublishing(true);
     try {
+      let moderationRes = { flagged: false };
+      try {
+        const res = await fetch("/api/moderate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: caption,
+            imageUrl: file ? await fileToDataUrl(file) : null,
+          }),
+        });
+        if (res.ok) moderationRes = await res.json();
+      } catch (e) {
+        // moderasyon servisine ulaşılamadı (ör. yerel geliştirme ortamı) — paylaşımı engelleme
+      }
+      if (moderationRes.flagged) {
+        setError("Bu içerik topluluk kurallarına aykırı görünüyor, paylaşılamadı.");
+        setPublishing(false);
+        return;
+      }
       let imageUrl = null;
       if (file) {
         const path = `${userId}/${Date.now()}-${file.name}`;
