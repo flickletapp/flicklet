@@ -4,7 +4,11 @@ import { C, FONT_DISPLAY, FONT_BODY } from "../theme";
 import { TopBar, BlobAvatar, PawBadge } from "../components/ui";
 import { CommentsModal } from "../components/modals";
 import { TRENDING, CONVERSATIONS } from "../mockData";
-import { supabaseSelect, supabaseInsert, supabaseDelete } from "../lib/supabaseClient";
+import { supabaseSelect, supabaseInsert, supabaseUpsert, supabaseDelete } from "../lib/supabaseClient";
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 async function loadFeed(session, userId) {
   const rows = await supabaseSelect(
@@ -16,6 +20,7 @@ async function loadFeed(session, userId) {
   let likeRows = [];
   let commentRows = [];
   let followingIds = new Set();
+  let hasVotedToday = false;
   if (postIds.length > 0) {
     const idList = postIds.join(",");
     [likeRows, commentRows] = await Promise.all([
@@ -26,6 +31,8 @@ async function loadFeed(session, userId) {
   if (userId) {
     const followRows = await supabaseSelect("follows", session?.access_token, `select=following_id&follower_id=eq.${userId}`);
     followingIds = new Set(followRows.map((f) => f.following_id));
+    const voteRows = await supabaseSelect("contest_votes", session?.access_token, `select=id&voter_id=eq.${userId}&voted_on=eq.${todayStr()}`);
+    hasVotedToday = voteRows.length > 0;
   }
   return rows.map((r) => ({
     id: r.id,
@@ -41,19 +48,65 @@ async function loadFeed(session, userId) {
     likedByMe: likeRows.some((l) => l.post_id === r.id && l.user_id === userId),
     commentCount: commentRows.filter((c) => c.post_id === r.id).length,
     isFollowing: followingIds.has(r.author_id),
+    hasVotedToday,
     tag: null,
   }));
 }
 
-export function PostCard({ post, session, userId, myName, onOpenComplaint, onOpenComments, onOpenProfile, isGuest, onRequireAuth }) {
+async function updateStreakAfterVote(session, userId) {
+  const now = new Date();
+  const today = todayStr();
+  const dayOfMonth = now.getUTCDate();
+  let existing = null;
+  try {
+    const rows = await supabaseSelect("vote_streaks", session.access_token, `select=current_month_votes,last_vote_date&user_id=eq.${userId}`);
+    existing = rows[0] || null;
+  } catch (e) {}
+  let sameMonth = false;
+  if (existing?.last_vote_date) {
+    const last = new Date(existing.last_vote_date);
+    sameMonth = last.getUTCFullYear() === now.getUTCFullYear() && last.getUTCMonth() === now.getUTCMonth();
+  }
+  const newVotes = sameMonth ? existing.current_month_votes + 1 : 1;
+  const badgeEarned = newVotes >= dayOfMonth;
+  await supabaseUpsert(
+    "vote_streaks",
+    session.access_token,
+    { user_id: userId, current_month_votes: newVotes, last_vote_date: today, badge_earned: badgeEarned },
+    "user_id"
+  );
+  return { currentMonthVotes: newVotes, badgeEarned };
+}
+
+export function PostCard({ post, session, userId, myName, onOpenComplaint, onOpenComments, onOpenProfile, isGuest, onRequireAuth, onStreakUpdate }) {
   const [liked, setLiked] = useState(post.likedByMe);
   const [likeCount, setLikeCount] = useState(post.likeCount);
   const [commentCount, setCommentCount] = useState(post.commentCount);
-  const [voted, setVoted] = useState(false);
+  const [voted, setVoted] = useState(!!post.hasVotedToday);
+  const [voteError, setVoteError] = useState("");
+  const [voting, setVoting] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [following, setFollowing] = useState(post.isFollowing);
   const [blocked, setBlocked] = useState(false);
   const [showComments, setShowComments] = useState(false);
+
+  const castVote = async () => {
+    if (isGuest) return onRequireAuth();
+    if (voted || voting) return;
+    setVoting(true);
+    setVoteError("");
+    try {
+      await supabaseInsert("contest_votes", session.access_token, { post_id: post.id, voter_id: userId, voted_on: todayStr() });
+      setVoted(true);
+      const streak = await updateStreakAfterVote(session, userId);
+      onStreakUpdate && onStreakUpdate(streak);
+    } catch (e) {
+      setVoted(true);
+      setVoteError("Bugün zaten oy kullandın");
+    } finally {
+      setVoting(false);
+    }
+  };
 
   const toggleLike = async () => {
     if (isGuest) return onRequireAuth();
@@ -184,11 +237,8 @@ export function PostCard({ post, session, userId, myName, onOpenComplaint, onOpe
 
           {post.contest && (
             <button
-              onClick={() => {
-                if (isGuest) return onRequireAuth();
-                if (!voted) setVoted(true);
-              }}
-              disabled={voted}
+              onClick={castVote}
+              disabled={voted || voting}
               style={{
                 marginLeft: "auto",
                 display: "flex",
@@ -205,10 +255,13 @@ export function PostCard({ post, session, userId, myName, onOpenComplaint, onOpe
               }}
             >
               <Trophy size={14} />
-              {voted ? "Oy verildi" : "Oy ver"}
+              {voting ? "..." : voted ? "Oy verildi" : "Oy ver"}
             </button>
           )}
         </div>
+        {voteError && (
+          <div style={{ fontFamily: FONT_BODY, fontSize: 11.5, color: C.coral, marginBottom: 8 }}>{voteError}</div>
+        )}
         {post.imageUrl ? (
           <div style={{ fontFamily: FONT_BODY, fontSize: 13.5, color: C.ink, lineHeight: 1.4 }}>
             <span style={{ fontWeight: 800 }}>{post.pet}</span> — {post.caption}
@@ -236,6 +289,7 @@ export function FeedScreen({ session, userId, myName, onOpenComplaint, onOpenPro
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [streak, setStreak] = useState(null);
   const unreadCount = CONVERSATIONS.filter((c) => c.unread).length;
 
   useEffect(() => {
@@ -251,6 +305,13 @@ export function FeedScreen({ session, userId, myName, onOpenComplaint, onOpenPro
     };
   }, [refreshKey, userId]);
 
+  useEffect(() => {
+    if (!userId) return;
+    supabaseSelect("vote_streaks", session?.access_token, `select=current_month_votes,badge_earned&user_id=eq.${userId}`)
+      .then((rows) => rows[0] && setStreak({ currentMonthVotes: rows[0].current_month_votes, badgeEarned: rows[0].badge_earned }))
+      .catch(() => {});
+  }, [userId]);
+
   return (
     <div>
       <TopBar
@@ -264,10 +325,10 @@ export function FeedScreen({ session, userId, myName, onOpenComplaint, onOpenPro
               <Mail size={19} />
               {!isGuest && unreadCount > 0 && <div style={{ position: "absolute", top: -3, right: -3, width: 8, height: 8, borderRadius: "50%", background: C.coral }} />}
             </button>
-            {!isGuest && (
-              <div style={{ display: "flex", alignItems: "center", gap: 4, color: C.pine }}>
+            {!isGuest && streak && streak.currentMonthVotes > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: 4, color: streak.badgeEarned ? C.mustard : C.pine }}>
                 <Flame size={16} />
-                <span style={{ fontFamily: FONT_DISPLAY, fontSize: 12 }}>7</span>
+                <span style={{ fontFamily: FONT_DISPLAY, fontSize: 12 }}>{streak.currentMonthVotes}</span>
               </div>
             )}
           </div>
@@ -333,6 +394,7 @@ export function FeedScreen({ session, userId, myName, onOpenComplaint, onOpenPro
             onOpenProfile={onOpenProfile}
             isGuest={isGuest}
             onRequireAuth={onRequireAuth}
+            onStreakUpdate={setStreak}
           />
         ))}
       </div>

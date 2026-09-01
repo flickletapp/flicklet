@@ -104,6 +104,22 @@ export async function supabaseCount(table, accessToken, query = "") {
   return range ? parseInt(range.split("/")[1], 10) || 0 : 0;
 }
 
+export async function supabaseUpsert(table, accessToken, body, onConflict) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?on_conflict=${onConflict}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${accessToken}`,
+      Prefer: "resolution=merge-duplicates,return=representation",
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || "Kayıt kaydedilemedi");
+  return data;
+}
+
 export async function supabaseDelete(table, accessToken, match) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${match}`, {
     method: "DELETE",

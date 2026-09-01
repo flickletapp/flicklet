@@ -146,7 +146,7 @@ export default function FlickletApp() {
               onRequireAuth={requireAuth}
             />
           )}
-          {tab === "contest" && <ContestScreen />}
+          {tab === "contest" && <ContestScreen session={session} />}
           {tab === "discover" && (
             <DiscoverScreen
               session={session}
