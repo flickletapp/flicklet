@@ -201,6 +201,7 @@ export default function FlickletApp() {
       )}
       {phase === "app" && searching && (
         <SearchScreen
+          session={session}
           onBack={() => setSearching(false)}
           onOpenProfile={(u) => {
             setSearching(false);

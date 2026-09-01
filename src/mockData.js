@@ -54,18 +54,3 @@ export const CATEGORY_SUGGESTIONS = [
   { id: 3, name: "En Şaşkın Bakış", votes: 156 },
   { id: 4, name: "İkili Dostluk (2 hayvan bir arada)", votes: 98 },
 ];
-
-export const leaderboard = [
-  { rank: 1, pet: "Boncuk", human: "Deniz A.", emoji: "🐹", votes: 501 },
-  { rank: 2, pet: "Mustafa", human: "Aslı K.", emoji: "🐱", votes: 342 },
-  { rank: 3, pet: "Pamuk", human: "Selin Y.", emoji: "🐰", votes: 298 },
-];
-
-export const MOCK_USERS = [
-  { handle: "@hardensouls", human: "Harden S.", pet: "Kaplan", petEmoji: "🐈‍⬛", color: "#17594B", followers: 412 },
-  { handle: "@asli.k", human: "Aslı K.", pet: "Mustafa", petEmoji: "🐱", color: "#F4A100", followers: 128 },
-  { handle: "@emret", human: "Emre T.", pet: "Zeytin", petEmoji: "🐶", color: "#17594B", followers: 89 },
-  { handle: "@seliny", human: "Selin Y.", pet: "Pamuk", petEmoji: "🐰", color: "#7A5CFF", followers: 64 },
-  { handle: "@denizA", human: "Deniz A.", pet: "Boncuk", petEmoji: "🐹", color: "#FF6F5C", followers: 256 },
-  { handle: "@bariskk", human: "Barış K.", pet: "Şeker", petEmoji: "🐕", color: "#17594B", followers: 143 },
-];
