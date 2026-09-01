@@ -42,10 +42,15 @@ export default function FlickletApp() {
     try {
       const u = await supabaseGetUser(sessionData.access_token);
       setUserId(u.id);
-      const existingPets = await supabaseSelect("pets", sessionData.access_token, `select=id,name,species,emoji&owner_id=eq.${u.id}`);
-      if (existingPets.length > 0) {
-        const profileRows = await supabaseSelect("profiles", sessionData.access_token, `select=display_name,is_private&id=eq.${u.id}`);
-        setUser({ name: profileRows[0]?.display_name || "" });
+      // Onboarding tamamlanma durumu profiles.display_name doluluğuna bağlı,
+      // pet sayısına değil — pet eklemek zorunlu değil (bkz. flicklet_stage0_audit P0).
+      const [profileRows, existingPets] = await Promise.all([
+        supabaseSelect("profiles", sessionData.access_token, `select=display_name,is_private&id=eq.${u.id}`),
+        supabaseSelect("pets", sessionData.access_token, `select=id,name,species,emoji&owner_id=eq.${u.id}`),
+      ]);
+      const displayName = profileRows[0]?.display_name;
+      if (displayName) {
+        setUser({ name: displayName });
         setIsPrivate(!!profileRows[0]?.is_private);
         setMyPets(existingPets);
         setPhase("app");

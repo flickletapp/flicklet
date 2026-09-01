@@ -52,6 +52,10 @@ export function ProfileSetupScreen({ onDone, session, userId }) {
     }
   };
 
+  const skipPet = () => {
+    onDone({ name, pets: [] });
+  };
+
   return (
     <div style={{ padding: "32px 24px", maxWidth: 420, margin: "0 auto" }}>
       <div style={{ display: "flex", gap: 6, marginBottom: 28 }}>
@@ -129,6 +133,20 @@ export function ProfileSetupScreen({ onDone, session, userId }) {
           <PrimaryButton style={{ width: "100%" }} disabled={!petName || loading} onClick={savePetAndFinish}>
             {loading ? "..." : "Profili tamamla"}
           </PrimaryButton>
+          <div
+            onClick={loading ? undefined : skipPet}
+            style={{
+              textAlign: "center",
+              marginTop: 16,
+              fontFamily: FONT_BODY,
+              fontSize: 13,
+              fontWeight: 700,
+              color: C.inkSoft,
+              cursor: loading ? "default" : "pointer",
+            }}
+          >
+            Şimdilik geç, hayvanımı sonra eklerim
+          </div>
         </>
       )}
     </div>
