@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { C, FONT_BODY } from "./theme";
 import { supabaseGetUser, supabaseSelect } from "./lib/supabaseClient";
+
+const SESSION_KEY = "flicklet_session";
 import { AuthScreen } from "./screens/Auth";
 import { ProfileSetupScreen } from "./screens/ProfileSetup";
 import { FeedScreen } from "./screens/Feed";
@@ -16,7 +18,7 @@ import { NavBar } from "./components/ui";
 import { ComplaintModal, SignupPromptModal } from "./components/modals";
 
 export default function FlickletApp() {
-  const [phase, setPhase] = useState("auth"); // auth -> setup -> app
+  const [phase, setPhase] = useState("loading"); // loading -> auth -> setup -> app
   const [tab, setTab] = useState("feed");
   const [user, setUser] = useState({ name: "" });
   const [isPrivate, setIsPrivate] = useState(false);
@@ -35,26 +37,60 @@ export default function FlickletApp() {
 
   const requireAuth = () => setPromptOpen(true);
 
+  const bootstrapSession = async (sessionData) => {
+    setSession(sessionData);
+    try {
+      const u = await supabaseGetUser(sessionData.access_token);
+      setUserId(u.id);
+      const existingPets = await supabaseSelect("pets", sessionData.access_token, `select=id,name,species,emoji&owner_id=eq.${u.id}`);
+      if (existingPets.length > 0) {
+        const profileRows = await supabaseSelect("profiles", sessionData.access_token, `select=display_name,is_private&id=eq.${u.id}`);
+        setUser({ name: profileRows[0]?.display_name || "" });
+        setIsPrivate(!!profileRows[0]?.is_private);
+        setMyPets(existingPets);
+        setPhase("app");
+        return;
+      }
+      setPhase("setup");
+    } catch (e) {
+      localStorage.removeItem(SESSION_KEY);
+      setSession(null);
+      setPhase("auth");
+    }
+  };
+
+  useEffect(() => {
+    const saved = localStorage.getItem(SESSION_KEY);
+    if (!saved) {
+      setPhase("auth");
+      return;
+    }
+    try {
+      bootstrapSession(JSON.parse(saved));
+    } catch (e) {
+      localStorage.removeItem(SESSION_KEY);
+      setPhase("auth");
+    }
+  }, []);
+
   const handleAuthDone = async (sessionData) => {
     if (sessionData?.access_token) {
-      setSession(sessionData);
-      try {
-        const u = await supabaseGetUser(sessionData.access_token);
-        setUserId(u.id);
-        const existingPets = await supabaseSelect("pets", sessionData.access_token, `select=id,name,species,emoji&owner_id=eq.${u.id}`);
-        if (existingPets.length > 0) {
-          const profileRows = await supabaseSelect("profiles", sessionData.access_token, `select=display_name,is_private&id=eq.${u.id}`);
-          setUser({ name: profileRows[0]?.display_name || "" });
-          setIsPrivate(!!profileRows[0]?.is_private);
-          setMyPets(existingPets);
-          setPhase("app");
-          return;
-        }
-      } catch (e) {
-        // profil/pet sorgusu başarısız oldu, kurulum akışına düş
-      }
+      localStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
+      await bootstrapSession(sessionData);
+      return;
     }
     setPhase("setup");
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem(SESSION_KEY);
+    setSession(null);
+    setUserId(null);
+    setUser({ name: "" });
+    setMyPets([]);
+    setIsGuest(false);
+    setTab("feed");
+    setPhase("auth");
   };
 
   return (
@@ -66,6 +102,11 @@ export default function FlickletApp() {
         ::-webkit-scrollbar { display: none; }
       `}</style>
 
+      {phase === "loading" && (
+        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <img src="/favicon.png" alt="" style={{ width: 48, height: 48, opacity: 0.6 }} />
+        </div>
+      )}
       {phase === "auth" && (
         <AuthScreen
           onDone={handleAuthDone}
@@ -127,6 +168,7 @@ export default function FlickletApp() {
               isPrivate={isPrivate}
               setIsPrivate={setIsPrivate}
               onOpenProfile={(p) => setViewingProfile(p)}
+              onLogout={handleLogout}
             />
           )}
           <NavBar tab={tab} setTab={setTab} isGuest={isGuest} onRequireAuth={requireAuth} onAdd={() => setCreating(true)} />

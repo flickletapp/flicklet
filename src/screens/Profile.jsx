@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Lock, Globe, Plus, Camera } from "lucide-react";
+import { Lock, Globe, Plus, Camera, LogOut } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../theme";
 import { TopBar, BlobAvatar } from "../components/ui";
 import { FollowListModal } from "../components/modals";
 import { MOCK_FOLLOWERS } from "../mockData";
 import { supabaseUpdate, supabaseCount, supabaseSelect, supabaseUploadImage } from "../lib/supabaseClient";
 
-export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsPrivate, onOpenProfile }) {
+export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsPrivate, onOpenProfile, onLogout }) {
   const [listOpen, setListOpen] = useState(null);
   const [dmPolicy, setDmPolicy] = useState("everyone");
   const [counts, setCounts] = useState({ followers: 0, following: 0, posts: 0 });
@@ -212,6 +212,29 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
             )}
           </div>
         )}
+
+        <button
+          onClick={onLogout}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            width: "100%",
+            marginTop: 28,
+            padding: "12px 8px",
+            borderRadius: 12,
+            border: `1.5px solid ${C.line}`,
+            background: "none",
+            fontFamily: FONT_BODY,
+            fontWeight: 700,
+            fontSize: 13,
+            color: C.coral,
+            cursor: "pointer",
+          }}
+        >
+          <LogOut size={15} /> Çıkış yap
+        </button>
       </div>
       {listOpen && (
         <FollowListModal
