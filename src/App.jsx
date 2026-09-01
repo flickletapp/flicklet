@@ -22,7 +22,7 @@ export default function FlickletApp() {
   const [tab, setTab] = useState("feed");
   const [user, setUser] = useState({ name: "" });
   const [isPrivate, setIsPrivate] = useState(false);
-  const [complaintOpen, setComplaintOpen] = useState(false);
+  const [complaintPostId, setComplaintPostId] = useState(null);
   const [myPets, setMyPets] = useState([]);
   const [isGuest, setIsGuest] = useState(false);
   const [promptOpen, setPromptOpen] = useState(false);
@@ -136,7 +136,7 @@ export default function FlickletApp() {
               userId={userId}
               myName={user.name}
               refreshKey={feedRefreshKey}
-              onOpenComplaint={() => setComplaintOpen(true)}
+              onOpenComplaint={(postId) => setComplaintPostId(postId)}
               onOpenProfile={(p) => setViewingProfile(p)}
               onCompose={() => setCreating(true)}
               onOpenSearch={() => setSearching(true)}
@@ -146,7 +146,9 @@ export default function FlickletApp() {
               onRequireAuth={requireAuth}
             />
           )}
-          {tab === "contest" && <ContestScreen session={session} />}
+          {tab === "contest" && (
+            <ContestScreen session={session} userId={userId} isGuest={isGuest} onRequireAuth={requireAuth} />
+          )}
           {tab === "discover" && (
             <DiscoverScreen
               session={session}
@@ -154,7 +156,7 @@ export default function FlickletApp() {
               myName={user.name}
               refreshKey={feedRefreshKey}
               onOpenProfile={(p) => setViewingProfile(p)}
-              onOpenComplaint={() => setComplaintOpen(true)}
+              onOpenComplaint={(postId) => setComplaintPostId(postId)}
               isGuest={isGuest}
               onRequireAuth={requireAuth}
             />
@@ -212,7 +214,9 @@ export default function FlickletApp() {
       {phase === "app" && inboxOpen && !activeChat && <InboxScreen onBack={() => setInboxOpen(false)} onOpenChat={(c) => setActiveChat(c)} />}
       {phase === "app" && activeChat && <ChatScreen conversation={activeChat} onBack={() => setActiveChat(null)} />}
 
-      {complaintOpen && <ComplaintModal onClose={() => setComplaintOpen(false)} />}
+      {complaintPostId && (
+        <ComplaintModal postId={complaintPostId} session={session} userId={userId} onClose={() => setComplaintPostId(null)} />
+      )}
       {promptOpen && (
         <SignupPromptModal
           onClose={() => setPromptOpen(false)}

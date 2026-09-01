@@ -47,10 +47,3 @@ export const CONVERSATIONS = [
     ],
   },
 ];
-
-export const CATEGORY_SUGGESTIONS = [
-  { id: 1, name: "En İyi Uyku Pozu", votes: 214 },
-  { id: 2, name: "En Enerjik An", votes: 187 },
-  { id: 3, name: "En Şaşkın Bakış", votes: 156 },
-  { id: 4, name: "İkili Dostluk (2 hayvan bir arada)", votes: 98 },
-];

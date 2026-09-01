@@ -20,6 +20,7 @@ async function loadFeed(session, userId) {
   let likeRows = [];
   let commentRows = [];
   let followingIds = new Set();
+  let blockedIds = new Set();
   let hasVotedToday = false;
   if (postIds.length > 0) {
     const idList = postIds.join(",");
@@ -33,8 +34,12 @@ async function loadFeed(session, userId) {
     followingIds = new Set(followRows.map((f) => f.following_id));
     const voteRows = await supabaseSelect("contest_votes", session?.access_token, `select=id&voter_id=eq.${userId}&voted_on=eq.${todayStr()}`);
     hasVotedToday = voteRows.length > 0;
+    const blockRows = await supabaseSelect("blocks", session?.access_token, `select=blocked_id&blocker_id=eq.${userId}`);
+    blockedIds = new Set(blockRows.map((b) => b.blocked_id));
   }
-  return rows.map((r) => ({
+  return rows
+    .filter((r) => !blockedIds.has(r.author_id))
+    .map((r) => ({
     id: r.id,
     authorId: r.author_id,
     isMine: r.author_id === userId,
@@ -195,7 +200,7 @@ export function PostCard({ post, session, userId, myName, onOpenComplaint, onOpe
               <button
                 onClick={() => {
                   setMenuOpen(false);
-                  onOpenComplaint();
+                  onOpenComplaint(post.id);
                 }}
                 style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "10px 12px", background: "none", border: "none", cursor: "pointer", fontFamily: FONT_BODY, fontSize: 13, color: C.coral, textAlign: "left" }}
               >
@@ -203,9 +208,12 @@ export function PostCard({ post, session, userId, myName, onOpenComplaint, onOpe
               </button>
               {!post.isMine && (
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     setMenuOpen(false);
                     setBlocked(true);
+                    try {
+                      await supabaseInsert("blocks", session.access_token, { blocker_id: userId, blocked_id: post.authorId });
+                    } catch (e) {}
                   }}
                   style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "10px 12px", background: "none", border: "none", borderTop: `1px solid ${C.line}`, cursor: "pointer", fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, textAlign: "left" }}
                 >

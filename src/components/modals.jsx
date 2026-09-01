@@ -190,8 +190,18 @@ export function CommentsModal({ post, session, userId, myName, onClose, onCommen
   );
 }
 
-export function ComplaintModal({ onClose }) {
+export function ComplaintModal({ postId, session, userId, onClose }) {
   const [sent, setSent] = useState(false);
+
+  const submitReport = async (reason) => {
+    setSent(true);
+    try {
+      await supabaseInsert("reports", session.access_token, { post_id: postId, reporter_id: userId, reason });
+    } catch (e) {
+      // sessiz geç; kullanıcıya zaten "alındı" gösterildi
+    }
+  };
+
   return (
     <div
       style={{
@@ -228,7 +238,7 @@ export function ComplaintModal({ onClose }) {
             {["Uygunsuz içerik", "Spam", "Hayvana zarar/ihmal görüntüsü", "Sahte hesap"].map((r) => (
               <button
                 key={r}
-                onClick={() => setSent(true)}
+                onClick={() => submitReport(r)}
                 style={{
                   display: "block",
                   width: "100%",

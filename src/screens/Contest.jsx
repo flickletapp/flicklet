@@ -2,8 +2,25 @@ import { useEffect, useState } from "react";
 import { Award, Sparkles } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../theme";
 import { TopBar, BlobAvatar } from "../components/ui";
-import { CATEGORIES, CATEGORY_SUGGESTIONS } from "../mockData";
-import { supabaseSelect } from "../lib/supabaseClient";
+import { CATEGORIES } from "../mockData";
+import { supabaseSelect, supabaseInsert } from "../lib/supabaseClient";
+
+async function loadSuggestions(session, userId) {
+  const rows = await supabaseSelect("category_suggestions", session?.access_token, "select=id,name,created_at&order=created_at.asc");
+  const ids = rows.map((r) => r.id);
+  let voteRows = [];
+  if (ids.length > 0) {
+    voteRows = await supabaseSelect("category_suggestion_votes", session?.access_token, `select=suggestion_id,voter_id&suggestion_id=in.(${ids.join(",")})`);
+  }
+  return rows
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      votes: voteRows.filter((v) => v.suggestion_id === r.id).length,
+      votedByMe: voteRows.some((v) => v.suggestion_id === r.id && v.voter_id === userId),
+    }))
+    .sort((a, b) => b.votes - a.votes);
+}
 
 async function loadLeaderboard(session, category) {
   const rows = await supabaseSelect(
@@ -28,12 +45,11 @@ async function loadLeaderboard(session, category) {
     .slice(0, 10);
 }
 
-// Not: "Gelecek Ay İçin Öner" sekmesi henüz mock veriyle çalışıyor — ayrı bir işte gerçek veriye bağlanacak.
-export function ContestScreen({ session }) {
+export function ContestScreen({ session, userId, isGuest, onRequireAuth }) {
   const [activeCat, setActiveCat] = useState(CATEGORIES[0]);
   const [view, setView] = useState("leaderboard"); // leaderboard | suggest
-  const [suggestions, setSuggestions] = useState(CATEGORY_SUGGESTIONS);
-  const [voted, setVoted] = useState({});
+  const [suggestions, setSuggestions] = useState([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(true);
   const [newIdea, setNewIdea] = useState("");
   const [board, setBoard] = useState([]);
   const [loadingBoard, setLoadingBoard] = useState(true);
@@ -50,17 +66,39 @@ export function ContestScreen({ session }) {
     };
   }, [activeCat]);
 
-  const voteFor = (id) => {
-    if (voted[id]) return;
-    setSuggestions((s) => s.map((c) => (c.id === id ? { ...c, votes: c.votes + 1 } : c)));
-    setVoted((v) => ({ ...v, [id]: true }));
+  useEffect(() => {
+    let active = true;
+    if (view !== "suggest") return;
+    setLoadingSuggestions(true);
+    loadSuggestions(session, userId)
+      .then((rows) => active && setSuggestions(rows))
+      .catch(() => active && setSuggestions([]))
+      .finally(() => active && setLoadingSuggestions(false));
+    return () => {
+      active = false;
+    };
+  }, [view]);
+
+  const voteFor = async (id) => {
+    if (isGuest) return onRequireAuth();
+    if (suggestions.find((s) => s.id === id)?.votedByMe) return;
+    setSuggestions((s) => s.map((c) => (c.id === id ? { ...c, votes: c.votes + 1, votedByMe: true } : c)));
+    try {
+      await supabaseInsert("category_suggestion_votes", session.access_token, { suggestion_id: id, voter_id: userId });
+    } catch (e) {}
   };
 
-  const addSuggestion = () => {
+  const addSuggestion = async () => {
+    if (isGuest) return onRequireAuth();
     if (!newIdea.trim()) return;
-    setSuggestions((s) => [...s, { id: Date.now(), name: newIdea, votes: 1 }]);
-    setVoted((v) => ({ ...v, [Date.now()]: true }));
+    const name = newIdea.trim();
     setNewIdea("");
+    try {
+      const inserted = await supabaseInsert("category_suggestions", session.access_token, { name, created_by: userId });
+      const id = inserted[0]?.id;
+      await supabaseInsert("category_suggestion_votes", session.access_token, { suggestion_id: id, voter_id: userId });
+      setSuggestions((s) => [...s, { id, name, votes: 1, votedByMe: true }]);
+    } catch (e) {}
   };
 
   return (
@@ -169,6 +207,14 @@ export function ContestScreen({ session }) {
             </button>
           </div>
 
+          {loadingSuggestions && (
+            <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, textAlign: "center", padding: "20px 0" }}>Yükleniyor...</div>
+          )}
+          {!loadingSuggestions && suggestions.length === 0 && (
+            <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, textAlign: "center", padding: "20px 0" }}>
+              Henüz kategori önerisi yok — ilk öneriyi sen yap.
+            </div>
+          )}
           {suggestions
             .slice()
             .sort((a, b) => b.votes - a.votes)
@@ -181,20 +227,20 @@ export function ContestScreen({ session }) {
                 </div>
                 <button
                   onClick={() => voteFor(s.id)}
-                  disabled={voted[s.id]}
+                  disabled={s.votedByMe}
                   style={{
-                    background: voted[s.id] ? "#EFEAE0" : C.pine,
-                    color: voted[s.id] ? C.inkSoft : C.cream,
+                    background: s.votedByMe ? "#EFEAE0" : C.pine,
+                    color: s.votedByMe ? C.inkSoft : C.cream,
                     border: "none",
                     borderRadius: 10,
                     padding: "7px 12px",
                     fontFamily: FONT_DISPLAY,
                     fontSize: 12,
-                    cursor: voted[s.id] ? "default" : "pointer",
+                    cursor: s.votedByMe ? "default" : "pointer",
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {voted[s.id] ? "Oylandı" : `Oy Ver · ${s.votes}`}
+                  {s.votedByMe ? "Oylandı" : `Oy Ver · ${s.votes}`}
                 </button>
               </div>
             ))}
