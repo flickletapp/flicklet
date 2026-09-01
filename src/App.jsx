@@ -211,8 +211,12 @@ export default function FlickletApp() {
           }}
         />
       )}
-      {phase === "app" && inboxOpen && !activeChat && <InboxScreen onBack={() => setInboxOpen(false)} onOpenChat={(c) => setActiveChat(c)} />}
-      {phase === "app" && activeChat && <ChatScreen conversation={activeChat} onBack={() => setActiveChat(null)} />}
+      {phase === "app" && inboxOpen && !activeChat && (
+        <InboxScreen session={session} userId={userId} onBack={() => setInboxOpen(false)} onOpenChat={(c) => setActiveChat(c)} />
+      )}
+      {phase === "app" && activeChat && (
+        <ChatScreen conversation={activeChat} session={session} userId={userId} onBack={() => setActiveChat(null)} />
+      )}
 
       {complaintPostId && (
         <ComplaintModal postId={complaintPostId} session={session} userId={userId} onClose={() => setComplaintPostId(null)} />

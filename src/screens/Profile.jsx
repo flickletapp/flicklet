@@ -27,10 +27,20 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
     supabaseSelect("posts", session?.access_token, `select=id,image_url,caption&author_id=eq.${userId}&order=created_at.desc`)
       .then(setMyPosts)
       .catch(() => {});
-    supabaseSelect("profiles", session?.access_token, `select=avatar_url&id=eq.${userId}`)
-      .then((rows) => setAvatarUrl(rows[0]?.avatar_url || null))
+    supabaseSelect("profiles", session?.access_token, `select=avatar_url,dm_policy&id=eq.${userId}`)
+      .then((rows) => {
+        setAvatarUrl(rows[0]?.avatar_url || null);
+        if (rows[0]?.dm_policy) setDmPolicy(rows[0].dm_policy);
+      })
       .catch(() => {});
   }, [userId]);
+
+  const changeDmPolicy = async (policy) => {
+    setDmPolicy(policy);
+    try {
+      await supabaseUpdate("profiles", session.access_token, `id=eq.${userId}`, { dm_policy: policy });
+    } catch (e) {}
+  };
 
   const handleAvatarChange = async (e) => {
     const file = e.target.files?.[0];
@@ -156,7 +166,7 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
           ].map((opt) => (
             <button
               key={opt.key}
-              onClick={() => setDmPolicy(opt.key)}
+              onClick={() => changeDmPolicy(opt.key)}
               style={{
                 flex: 1,
                 padding: "11px 8px",

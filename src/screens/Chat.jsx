@@ -1,33 +1,75 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Send } from "lucide-react";
 import { C, FONT_BODY } from "../theme";
 import { TopBar, BlobAvatar } from "../components/ui";
+import { supabaseSelect, supabaseInsert, supabaseUpdate } from "../lib/supabaseClient";
 
-// Not: Bu ekran henüz mock veriyle çalışıyor — Faz C'de gerçek zamanlı DM'e bağlanacak.
-export function ChatScreen({ conversation, onBack }) {
-  const [messages, setMessages] = useState(conversation.messages);
+export function ChatScreen({ conversation, session, userId, onBack }) {
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [text, setText] = useState("");
 
-  const send = () => {
+  useEffect(() => {
+    let active = true;
+    supabaseSelect(
+      "messages",
+      session?.access_token,
+      `select=id,sender_id,text,created_at&or=(and(sender_id.eq.${userId},recipient_id.eq.${conversation.targetId}),and(sender_id.eq.${conversation.targetId},recipient_id.eq.${userId}))&order=created_at.asc`
+    )
+      .then((rows) => active && setMessages(rows))
+      .catch(() => {})
+      .finally(() => active && setLoading(false));
+    supabaseUpdate(
+      "messages",
+      session?.access_token,
+      `recipient_id=eq.${userId}&sender_id=eq.${conversation.targetId}&read=eq.false`,
+      { read: true }
+    ).catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [conversation.targetId]);
+
+  const send = async () => {
     if (!text.trim()) return;
-    setMessages((m) => [...m, { from: "me", text }]);
+    const body = text;
     setText("");
+    setError("");
+    try {
+      const inserted = await supabaseInsert("messages", session.access_token, {
+        sender_id: userId,
+        recipient_id: conversation.targetId,
+        text: body,
+      });
+      setMessages((m) => [...m, inserted[0]]);
+    } catch (e) {
+      setError("Mesaj gönderilemedi — bu kişi sadece takipçilerinden mesaj alıyor olabilir.");
+    }
   };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
       <TopBar title={conversation.human} onBack={onBack} right={<BlobAvatar emoji={conversation.petEmoji} size={30} color={conversation.color} />} />
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 14px", maxWidth: 480, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
-        {messages.map((m, i) => (
-          <div key={i} style={{ display: "flex", justifyContent: m.from === "me" ? "flex-end" : "flex-start", marginBottom: 10 }}>
+        {loading && (
+          <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, textAlign: "center", padding: "20px 0" }}>Yükleniyor...</div>
+        )}
+        {!loading && messages.length === 0 && (
+          <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, textAlign: "center", padding: "20px 0" }}>
+            Henüz mesaj yok, ilk mesajı sen yaz.
+          </div>
+        )}
+        {messages.map((m) => (
+          <div key={m.id} style={{ display: "flex", justifyContent: m.sender_id === userId ? "flex-end" : "flex-start", marginBottom: 10 }}>
             <div
               style={{
                 maxWidth: "75%",
                 padding: "10px 14px",
-                borderRadius: m.from === "me" ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-                background: m.from === "me" ? C.mustard : C.cream,
-                color: m.from === "me" ? C.cream : C.ink,
-                border: m.from === "me" ? "none" : `1px solid ${C.line}`,
+                borderRadius: m.sender_id === userId ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+                background: m.sender_id === userId ? C.mustard : C.cream,
+                color: m.sender_id === userId ? C.cream : C.ink,
+                border: m.sender_id === userId ? "none" : `1px solid ${C.line}`,
                 fontFamily: FONT_BODY,
                 fontSize: 13.5,
                 lineHeight: 1.4,
@@ -38,6 +80,11 @@ export function ChatScreen({ conversation, onBack }) {
           </div>
         ))}
       </div>
+      {error && (
+        <div style={{ padding: "0 14px 8px", maxWidth: 480, margin: "0 auto", width: "100%", boxSizing: "border-box", fontFamily: FONT_BODY, fontSize: 12, color: C.coral }}>
+          {error}
+        </div>
+      )}
       <div style={{ display: "flex", gap: 8, padding: "10px 14px 18px", borderTop: `1px solid ${C.line}`, maxWidth: 480, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
         <input
           value={text}

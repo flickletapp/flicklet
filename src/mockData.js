@@ -15,35 +15,3 @@ export const TRENDING = [
   { tag: "#BeslenmeSaati", count: "512" },
   { tag: "#YeniAksesuar", count: "310" },
 ];
-
-export const CONVERSATIONS = [
-  {
-    id: 1,
-    handle: "@seliny",
-    human: "Selin Y.",
-    petEmoji: "🐰",
-    color: "#7A5CFF",
-    canMessage: true,
-    lastMessage: "Pamuk'un fotoğrafı çok tatlıymış 😍",
-    unread: true,
-    messages: [
-      { from: "them", text: "Selam! Pamuk'un fotoğrafı çok tatlıymış 😍" },
-      { from: "me", text: "Teşekkürler! Yeni kostümünü deniyordu" },
-    ],
-  },
-  {
-    id: 2,
-    handle: "@bariskk",
-    human: "Barış K.",
-    petEmoji: "🐕",
-    color: "#17594B",
-    canMessage: true,
-    lastMessage: "Park önerisi için teşekkürler",
-    unread: false,
-    messages: [
-      { from: "them", text: "Hangi parkı önerirsin, köpek dostu bir yer arıyorum" },
-      { from: "me", text: "Belgrad Ormanı harika, geniş alan var" },
-      { from: "them", text: "Park önerisi için teşekkürler" },
-    ],
-  },
-];

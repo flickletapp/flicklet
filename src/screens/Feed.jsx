@@ -3,8 +3,8 @@ import { Heart, MessageCircle, Trophy, Flag, X, Search, Mail, Flame, Plus } from
 import { C, FONT_DISPLAY, FONT_BODY } from "../theme";
 import { TopBar, BlobAvatar, PawBadge } from "../components/ui";
 import { CommentsModal } from "../components/modals";
-import { TRENDING, CONVERSATIONS } from "../mockData";
-import { supabaseSelect, supabaseInsert, supabaseUpsert, supabaseDelete } from "../lib/supabaseClient";
+import { TRENDING } from "../mockData";
+import { supabaseSelect, supabaseInsert, supabaseUpsert, supabaseDelete, supabaseCount } from "../lib/supabaseClient";
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -298,7 +298,7 @@ export function FeedScreen({ session, userId, myName, onOpenComplaint, onOpenPro
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [streak, setStreak] = useState(null);
-  const unreadCount = CONVERSATIONS.filter((c) => c.unread).length;
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -318,7 +318,10 @@ export function FeedScreen({ session, userId, myName, onOpenComplaint, onOpenPro
     supabaseSelect("vote_streaks", session?.access_token, `select=current_month_votes,badge_earned&user_id=eq.${userId}`)
       .then((rows) => rows[0] && setStreak({ currentMonthVotes: rows[0].current_month_votes, badgeEarned: rows[0].badge_earned }))
       .catch(() => {});
-  }, [userId]);
+    supabaseCount("messages", session?.access_token, `select=id&recipient_id=eq.${userId}&read=eq.false`)
+      .then(setUnreadCount)
+      .catch(() => {});
+  }, [userId, refreshKey]);
 
   return (
     <div>

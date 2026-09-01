@@ -62,12 +62,11 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
               isGuest
                 ? onRequireAuth()
                 : onOpenChat({
-                    id: "new-" + target.authorId,
+                    targetId: target.authorId,
                     handle: target.handle,
                     human: target.human,
                     petEmoji: target.petEmoji,
                     color: C.mustard,
-                    messages: [],
                   })
             }
             style={{ display: "flex", alignItems: "center", gap: 6, background: C.cream, color: C.ink, border: `1.5px solid ${C.line}`, borderRadius: 10, padding: "9px 14px", fontFamily: FONT_DISPLAY, fontSize: 12.5, cursor: "pointer" }}
