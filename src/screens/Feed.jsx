@@ -1,0 +1,337 @@
+import { useEffect, useState } from "react";
+import { Heart, MessageCircle, Trophy, Flag, X, Search, Mail, Flame, Plus } from "lucide-react";
+import { C, FONT_DISPLAY, FONT_BODY } from "../theme";
+import { TopBar, BlobAvatar, PawBadge } from "../components/ui";
+import { CommentsModal } from "../components/modals";
+import { TRENDING, CONVERSATIONS } from "../mockData";
+import { supabaseSelect, supabaseInsert, supabaseDelete } from "../lib/supabaseClient";
+
+async function loadFeed(session, userId) {
+  const rows = await supabaseSelect(
+    "posts",
+    session?.access_token,
+    "select=id,author_id,pet_id,caption,image_url,contest_category,created_at,profiles!posts_author_id_fkey(display_name,is_private),pets(name,emoji)&order=created_at.desc"
+  );
+  const postIds = rows.map((r) => r.id);
+  let likeRows = [];
+  let commentRows = [];
+  let followingIds = new Set();
+  if (postIds.length > 0) {
+    const idList = postIds.join(",");
+    [likeRows, commentRows] = await Promise.all([
+      supabaseSelect("likes", session?.access_token, `select=post_id,user_id&post_id=in.(${idList})`),
+      supabaseSelect("comments", session?.access_token, `select=post_id&post_id=in.(${idList})`),
+    ]);
+  }
+  if (userId) {
+    const followRows = await supabaseSelect("follows", session?.access_token, `select=following_id&follower_id=eq.${userId}`);
+    followingIds = new Set(followRows.map((f) => f.following_id));
+  }
+  return rows.map((r) => ({
+    id: r.id,
+    authorId: r.author_id,
+    isMine: r.author_id === userId,
+    human: r.profiles?.display_name || "Kullanıcı",
+    pet: r.pets?.name || "Dost",
+    petEmoji: r.pets?.emoji || "🐾",
+    imageUrl: r.image_url,
+    caption: r.caption,
+    contest: r.contest_category,
+    likeCount: likeRows.filter((l) => l.post_id === r.id).length,
+    likedByMe: likeRows.some((l) => l.post_id === r.id && l.user_id === userId),
+    commentCount: commentRows.filter((c) => c.post_id === r.id).length,
+    isFollowing: followingIds.has(r.author_id),
+    tag: null,
+  }));
+}
+
+export function PostCard({ post, session, userId, myName, onOpenComplaint, onOpenComments, onOpenProfile, isGuest, onRequireAuth }) {
+  const [liked, setLiked] = useState(post.likedByMe);
+  const [likeCount, setLikeCount] = useState(post.likeCount);
+  const [commentCount, setCommentCount] = useState(post.commentCount);
+  const [voted, setVoted] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [following, setFollowing] = useState(post.isFollowing);
+  const [blocked, setBlocked] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+
+  const toggleLike = async () => {
+    if (isGuest) return onRequireAuth();
+    const next = !liked;
+    setLiked(next);
+    setLikeCount((c) => (next ? c + 1 : c - 1));
+    try {
+      if (next) await supabaseInsert("likes", session.access_token, { post_id: post.id, user_id: userId });
+      else await supabaseDelete("likes", session.access_token, `post_id=eq.${post.id}&user_id=eq.${userId}`);
+    } catch (e) {
+      setLiked(!next);
+      setLikeCount((c) => (next ? c - 1 : c + 1));
+    }
+  };
+
+  const toggleFollow = async () => {
+    if (isGuest) return onRequireAuth();
+    const next = !following;
+    setFollowing(next);
+    try {
+      if (next) await supabaseInsert("follows", session.access_token, { follower_id: userId, following_id: post.authorId });
+      else await supabaseDelete("follows", session.access_token, `follower_id=eq.${userId}&following_id=eq.${post.authorId}`);
+    } catch (e) {
+      setFollowing(!next);
+    }
+  };
+
+  if (blocked) {
+    return (
+      <div
+        style={{
+          background: C.cream,
+          borderRadius: 20,
+          border: `1px solid ${C.line}`,
+          marginBottom: 16,
+          padding: "18px 16px",
+          textAlign: "center",
+          fontFamily: FONT_BODY,
+          fontSize: 13,
+          color: C.inkSoft,
+        }}
+      >
+        {post.human} engellendi, gönderileri artık görünmeyecek.
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: C.cream, borderRadius: 20, border: `1px solid ${C.line}`, marginBottom: 16, overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px" }}>
+        <div
+          onClick={() => !post.isMine && onOpenProfile && onOpenProfile(post)}
+          style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, cursor: post.isMine ? "default" : "pointer" }}
+        >
+          <BlobAvatar emoji={post.petEmoji} color={C.mustard} />
+          <div>
+            <div style={{ fontFamily: FONT_DISPLAY, fontSize: 14, color: C.ink }}>{post.pet}</div>
+            <div style={{ fontFamily: FONT_BODY, fontSize: 12, color: C.inkSoft }}>{post.human}</div>
+          </div>
+        </div>
+        {post.contest && <PawBadge color={C.mustard}>🏆 {post.contest}</PawBadge>}
+        {!post.isMine && (
+          <button
+            onClick={toggleFollow}
+            style={{
+              background: following ? C.cream : C.pine,
+              color: following ? C.pine : C.cream,
+              border: `1.5px solid ${C.pine}`,
+              borderRadius: 10,
+              padding: "5px 10px",
+              fontFamily: FONT_DISPLAY,
+              fontSize: 11.5,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {following ? "Takipte" : "Takip Et"}
+          </button>
+        )}
+        <div style={{ position: "relative" }}>
+          <button onClick={() => setMenuOpen((v) => !v)} style={{ background: "none", border: "none", cursor: "pointer", color: C.inkSoft, fontSize: 18, padding: "0 4px" }}>
+            ⋯
+          </button>
+          {menuOpen && (
+            <div style={{ position: "absolute", right: 0, top: 26, background: C.cream, border: `1px solid ${C.line}`, borderRadius: 10, boxShadow: "0 6px 18px rgba(0,0,0,0.08)", zIndex: 10, minWidth: 150 }}>
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  onOpenComplaint();
+                }}
+                style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "10px 12px", background: "none", border: "none", cursor: "pointer", fontFamily: FONT_BODY, fontSize: 13, color: C.coral, textAlign: "left" }}
+              >
+                <Flag size={14} /> Şikayet et
+              </button>
+              {!post.isMine && (
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setBlocked(true);
+                  }}
+                  style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "10px 12px", background: "none", border: "none", borderTop: `1px solid ${C.line}`, cursor: "pointer", fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, textAlign: "left" }}
+                >
+                  <X size={14} /> Engelle
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <img src={post.imageUrl} alt={post.caption} style={{ width: "100%", maxHeight: 420, objectFit: "contain", display: "block", background: C.paper }} />
+
+      <div style={{ padding: "12px 14px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 10 }}>
+          <button onClick={toggleLike} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+            <Heart size={22} color={liked ? C.coral : C.inkSoft} fill={liked ? C.coral : "none"} strokeWidth={2} />
+            <span style={{ fontFamily: FONT_BODY, fontWeight: 700, fontSize: 13, color: C.inkSoft }}>{likeCount}</span>
+          </button>
+          <div
+            onClick={() => (isGuest ? onRequireAuth() : onOpenComments ? onOpenComments() : setShowComments(true))}
+            style={{ display: "flex", alignItems: "center", gap: 5, color: C.inkSoft, cursor: "pointer" }}
+          >
+            <MessageCircle size={20} />
+            <span style={{ fontFamily: FONT_BODY, fontWeight: 700, fontSize: 13 }}>{commentCount}</span>
+          </div>
+
+          {post.contest && (
+            <button
+              onClick={() => {
+                if (isGuest) return onRequireAuth();
+                if (!voted) setVoted(true);
+              }}
+              disabled={voted}
+              style={{
+                marginLeft: "auto",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                background: voted ? "#EFEAE0" : C.mustard,
+                color: voted ? C.inkSoft : C.cream,
+                border: "none",
+                borderRadius: 10,
+                padding: "7px 12px",
+                fontFamily: FONT_DISPLAY,
+                fontSize: 12.5,
+                cursor: voted ? "default" : "pointer",
+              }}
+            >
+              <Trophy size={14} />
+              {voted ? "Oy verildi" : "Oy ver"}
+            </button>
+          )}
+        </div>
+        <div style={{ fontFamily: FONT_BODY, fontSize: 13.5, color: C.ink, lineHeight: 1.4 }}>
+          <span style={{ fontWeight: 800 }}>{post.pet}</span> — {post.caption}
+        </div>
+      </div>
+
+      {showComments && (
+        <CommentsModal
+          post={post}
+          session={session}
+          userId={userId}
+          myName={myName}
+          onClose={() => setShowComments(false)}
+          onCommentAdded={() => setCommentCount((c) => c + 1)}
+        />
+      )}
+    </div>
+  );
+}
+
+export function FeedScreen({ session, userId, myName, onOpenComplaint, onOpenProfile, onCompose, onOpenSearch, onOpenInbox, myFirstPet, isGuest, onRequireAuth, refreshKey }) {
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const unreadCount = CONVERSATIONS.filter((c) => c.unread).length;
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError("");
+    loadFeed(session, userId)
+      .then((rows) => active && setPosts(rows))
+      .catch((e) => active && setError(e.message))
+      .finally(() => active && setLoading(false));
+    return () => {
+      active = false;
+    };
+  }, [refreshKey, userId]);
+
+  return (
+    <div>
+      <TopBar
+        title="Flicklet"
+        right={
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <button onClick={() => (isGuest ? onRequireAuth() : onOpenSearch())} style={{ background: "none", border: "none", cursor: "pointer", color: C.ink, padding: 0, display: "flex" }}>
+              <Search size={19} />
+            </button>
+            <button onClick={() => (isGuest ? onRequireAuth() : onOpenInbox())} style={{ background: "none", border: "none", cursor: "pointer", color: C.ink, padding: 0, display: "flex", position: "relative" }}>
+              <Mail size={19} />
+              {!isGuest && unreadCount > 0 && <div style={{ position: "absolute", top: -3, right: -3, width: 8, height: 8, borderRadius: "50%", background: C.coral }} />}
+            </button>
+            {!isGuest && (
+              <div style={{ display: "flex", alignItems: "center", gap: 4, color: C.pine }}>
+                <Flame size={16} />
+                <span style={{ fontFamily: FONT_DISPLAY, fontSize: 12 }}>7</span>
+              </div>
+            )}
+          </div>
+        }
+      />
+
+      <div style={{ padding: "14px 14px 4px", maxWidth: 480, margin: "0 auto" }}>
+        <div style={{ fontFamily: FONT_DISPLAY, fontSize: 12.5, color: C.inkSoft, marginBottom: 8, display: "flex", alignItems: "center", gap: 5 }}>🔥 Gündemde</div>
+        <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 10 }}>
+          {TRENDING.map((t) => (
+            <div key={t.tag} style={{ whiteSpace: "nowrap", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1, padding: "8px 13px", borderRadius: 13, border: `2px solid ${C.line}`, background: C.cream, minWidth: 96 }}>
+              <span style={{ fontFamily: FONT_DISPLAY, fontSize: 12.5, color: C.ink }}>{t.tag}</span>
+              <span style={{ fontFamily: FONT_BODY, fontSize: 10.5, color: C.inkSoft }}>{t.count} flick</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ padding: "0 14px", maxWidth: 480, margin: "0 auto" }}>
+        <div
+          onClick={() => (isGuest ? onRequireAuth() : onCompose())}
+          style={{ display: "flex", alignItems: "center", gap: 10, background: C.cream, border: `1px solid ${C.line}`, borderRadius: 16, padding: "10px 12px", marginBottom: 6, cursor: "pointer" }}
+        >
+          <BlobAvatar emoji={myFirstPet?.emoji || "🐾"} size={36} color={C.mustard} />
+          <div style={{ flex: 1, fontFamily: FONT_BODY, fontSize: 13.5, color: C.inkSoft, padding: "9px 14px", background: C.paper, borderRadius: 20 }}>
+            Flick at, nasıl olduğunu paylaş 🐾
+          </div>
+          <div style={{ width: 34, height: 34, borderRadius: "40% 60% 60% 40% / 45% 45% 55% 55%", background: C.mustard, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Plus size={17} color={C.cream} />
+          </div>
+        </div>
+      </div>
+
+      {isGuest && (
+        <div
+          onClick={onRequireAuth}
+          style={{ margin: "4px 14px 0", maxWidth: 480 - 28, marginLeft: "auto", marginRight: "auto", background: C.mustard, color: C.cream, borderRadius: 14, padding: "11px 14px", fontFamily: FONT_BODY, fontSize: 12.5, fontWeight: 700, cursor: "pointer", textAlign: "center" }}
+        >
+          👀 Şu an gözatıyorsun — beğenmek, oy vermek ve paylaşmak için üye ol
+        </div>
+      )}
+
+      <div style={{ padding: "16px 14px 90px", maxWidth: 480, margin: "0 auto" }}>
+        {loading && (
+          <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, textAlign: "center", padding: "30px 0" }}>Yükleniyor...</div>
+        )}
+        {!loading && error && (
+          <div style={{ background: "#FDECEA", color: "#C0392B", padding: "12px 14px", borderRadius: 10, fontFamily: FONT_BODY, fontSize: 12.5, marginBottom: 14 }}>{error}</div>
+        )}
+        {!loading && !error && posts.length === 0 && (
+          <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, textAlign: "center", padding: "30px 0" }}>
+            Henüz gönderi yok — ilk flick'i sen at 🐾
+          </div>
+        )}
+        {posts.map((p) => (
+          <PostCard
+            key={p.id}
+            post={p}
+            session={session}
+            userId={userId}
+            myName={myName}
+            onOpenComplaint={isGuest ? onRequireAuth : onOpenComplaint}
+            onOpenProfile={onOpenProfile}
+            isGuest={isGuest}
+            onRequireAuth={onRequireAuth}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export { loadFeed };
