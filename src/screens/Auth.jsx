@@ -48,7 +48,7 @@ export function AuthScreen({ onDone, onGuest }) {
     <div style={{ padding: "40px 24px", maxWidth: 420, margin: "0 auto" }}>
       <div style={{ textAlign: "center", marginBottom: 32 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
-          <img src="/favicon.png" alt="" style={{ width: 40, height: 40 }} />
+          <img src="/favicon.png" alt="" style={{ width: 60, height: 60 }} />
           <div
             style={{
               fontFamily: FONT_DISPLAY,
