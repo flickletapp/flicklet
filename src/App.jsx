@@ -38,6 +38,49 @@ async function supabaseFetchTable(path, accessToken) {
   return res.json();
 }
 
+async function supabaseGetUser(accessToken) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  if (!res.ok) throw new Error("Kullanıcı bilgisi alınamadı");
+  return res.json();
+}
+
+async function supabaseInsert(table, accessToken, body) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${accessToken}`,
+      Prefer: "return=representation",
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || "Kayıt eklenemedi");
+  return data;
+}
+
+async function supabaseUpdate(table, accessToken, match, body) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${match}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${accessToken}`,
+      Prefer: "return=representation",
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || "Kayıt güncellenemedi");
+  return data;
+}
+
 // ---------- Design tokens ----------
 const C = {
   paper: "#FBF3E7",
@@ -453,11 +496,55 @@ function AuthScreen({ onDone, onGuest }) {
   );
 }
 
-function ProfileSetupScreen({ onDone }) {
+function ProfileSetupScreen({ onDone, session, userId }) {
   const [step, setStep] = useState(1);
   const [name, setName] = useState("");
   const [petName, setPetName] = useState("");
   const [petType, setPetType] = useState("cat");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const petEmoji = { cat: "🐱", dog: "🐶", other: "🐾" }[petType];
+
+  const saveNameAndContinue = async () => {
+    setError("");
+    if (!session || !userId) {
+      // Misafir/gerçek oturum yoksa (beklenmedik durum), sadece ilerle
+      setStep(2);
+      return;
+    }
+    setLoading(true);
+    try {
+      await supabaseUpdate("profiles", session.access_token, `id=eq.${userId}`, { display_name: name });
+      setStep(2);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const savePetAndFinish = async () => {
+    setError("");
+    if (!session || !userId) {
+      onDone({ name, pets: [{ name: petName, emoji: petEmoji, species: petType }] });
+      return;
+    }
+    setLoading(true);
+    try {
+      await supabaseInsert("pets", session.access_token, {
+        owner_id: userId,
+        name: petName,
+        species: petType,
+        emoji: petEmoji,
+      });
+      onDone({ name, pets: [{ name: petName, emoji: petEmoji, species: petType }] });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div style={{ padding: "32px 24px", maxWidth: 420, margin: "0 auto" }}>
@@ -467,6 +554,22 @@ function ProfileSetupScreen({ onDone }) {
         ))}
       </div>
 
+      {error && (
+        <div
+          style={{
+            background: "#FDECEA",
+            color: "#C0392B",
+            padding: "10px 14px",
+            borderRadius: 10,
+            fontFamily: FONT_BODY,
+            fontSize: 12.5,
+            marginBottom: 14,
+          }}
+        >
+          {error}
+        </div>
+      )}
+
       {step === 1 && (
         <>
           <div style={{ fontFamily: FONT_DISPLAY, fontSize: 22, color: C.ink, marginBottom: 4 }}>Önce seni tanıyalım</div>
@@ -474,8 +577,8 @@ function ProfileSetupScreen({ onDone }) {
             Bu senin insan profilin — hayvanlarını birazdan ekleyeceksin.
           </div>
           <TextField label="Adın Soyadın" value={name} onChange={(e) => setName(e.target.value)} placeholder="Örn. Ayşe Yılmaz" />
-          <PrimaryButton style={{ width: "100%", marginTop: 8 }} disabled={!name} onClick={() => setStep(2)}>
-            Devam et
+          <PrimaryButton style={{ width: "100%", marginTop: 8 }} disabled={!name || loading} onClick={saveNameAndContinue}>
+            {loading ? "..." : "Devam et"}
           </PrimaryButton>
         </>
       )}
@@ -517,8 +620,8 @@ function ProfileSetupScreen({ onDone }) {
               ))}
             </div>
           </div>
-          <PrimaryButton style={{ width: "100%" }} disabled={!petName} onClick={onDone}>
-            Profili tamamla
+          <PrimaryButton style={{ width: "100%" }} disabled={!petName || loading} onClick={savePetAndFinish}>
+            {loading ? "..." : "Profili tamamla"}
           </PrimaryButton>
         </>
       )}
@@ -2296,6 +2399,7 @@ export default function FlickletPrototype() {
   const [promptOpen, setPromptOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [session, setSession] = useState(null);
+  const [userId, setUserId] = useState(null);
   const [viewingProfile, setViewingProfile] = useState(null);
   const [searching, setSearching] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
@@ -2342,9 +2446,15 @@ export default function FlickletPrototype() {
 
       {phase === "auth" && (
         <AuthScreen
-          onDone={(sessionData) => {
+          onDone={async (sessionData) => {
             if (sessionData?.access_token) {
               setSession(sessionData);
+              try {
+                const u = await supabaseGetUser(sessionData.access_token);
+                setUserId(u.id);
+              } catch (e) {
+                // sessiz geç, ProfileSetupScreen misafir moduna düşer
+              }
             }
             setPhase("setup");
           }}
@@ -2356,8 +2466,12 @@ export default function FlickletPrototype() {
       )}
       {phase === "setup" && (
         <ProfileSetupScreen
-          onDone={() => {
+          session={session}
+          userId={userId}
+          onDone={(profileData) => {
             setIsGuest(false);
+            if (profileData?.name) setUser({ name: profileData.name });
+            if (profileData?.pets) setMyPets(profileData.pets);
             setPhase("app");
           }}
         />
