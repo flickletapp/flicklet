@@ -3,17 +3,17 @@ import { C, FONT_BODY } from "./theme";
 import { supabaseGetUser, supabaseSelect } from "./lib/supabase/client";
 
 const SESSION_KEY = "flicklet_session";
-import { AuthScreen } from "./screens/Auth";
-import { ProfileSetupScreen } from "./screens/ProfileSetup";
-import { FeedScreen } from "./screens/Feed";
-import { CreatePostScreen } from "./screens/CreatePost";
-import { DiscoverScreen } from "./screens/Discover";
-import { ContestScreen } from "./screens/Contest";
-import { ProfileScreen } from "./screens/Profile";
-import { UserProfileView } from "./screens/UserProfileView";
-import { SearchScreen } from "./screens/Search";
-import { InboxScreen } from "./screens/Inbox";
-import { ChatScreen } from "./screens/Chat";
+import { AuthScreen } from "./features/auth/Auth";
+import { ProfileSetupScreen } from "./features/auth/ProfileSetup";
+import { FeedScreen } from "./features/posts/Feed";
+import { CreatePostScreen } from "./features/posts/CreatePost";
+import { DiscoverScreen } from "./features/posts/Discover";
+import { ContestScreen } from "./features/contests/Contest";
+import { ProfileScreen } from "./features/profiles/Profile";
+import { UserProfileView } from "./features/profiles/UserProfileView";
+import { SearchScreen } from "./features/profiles/Search";
+import { InboxScreen } from "./features/messages/Inbox";
+import { ChatScreen } from "./features/messages/Chat";
 import { NavBar } from "./components/ui";
 import { ComplaintModal, SignupPromptModal } from "./components/modals";
 

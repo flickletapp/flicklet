@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { C, FONT_DISPLAY, FONT_BODY } from "../theme";
-import { TextField, PrimaryButton } from "../components/ui";
-import { supabaseUpdate, supabaseInsert } from "../lib/supabase/client";
+import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
+import { TextField, PrimaryButton } from "../../components/ui";
+import { supabaseUpdate, supabaseInsert } from "../../lib/supabase/client";
 
 export function ProfileSetupScreen({ onDone, session, userId }) {
   const [step, setStep] = useState(1);

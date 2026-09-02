@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Heart } from "lucide-react";
-import { C, FONT_DISPLAY, FONT_BODY } from "../theme";
-import { TopBar } from "../components/ui";
-import { CATEGORIES } from "../mockData";
+import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
+import { TopBar } from "../../components/ui";
+import { CATEGORIES } from "../../mockData";
 import { loadFeed, PostCard } from "./Feed";
 
 const DISCOVER_FILTERS = ["Tümü", "En Beğenilenler", ...CATEGORIES];

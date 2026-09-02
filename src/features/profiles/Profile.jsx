@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Lock, Globe, Plus, Camera, LogOut } from "lucide-react";
-import { C, FONT_DISPLAY, FONT_BODY } from "../theme";
-import { TopBar, BlobAvatar } from "../components/ui";
-import { FollowListModal } from "../components/modals";
-import { MOCK_FOLLOWERS } from "../mockData";
-import { supabaseUpdate, supabaseCount, supabaseSelect, supabaseUploadImage } from "../lib/supabase/client";
+import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
+import { TopBar, BlobAvatar } from "../../components/ui";
+import { FollowListModal } from "../../components/modals";
+import { MOCK_FOLLOWERS } from "../../mockData";
+import { supabaseUpdate, supabaseCount, supabaseSelect, supabaseUploadImage } from "../../lib/supabase/client";
 
 export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsPrivate, onOpenProfile, onLogout }) {
   const [listOpen, setListOpen] = useState(null);

@@ -1,9 +1,9 @@
 import { useRef, useState } from "react";
 import { Camera, Trophy } from "lucide-react";
-import { C, FONT_DISPLAY, FONT_BODY } from "../theme";
-import { TopBar, PrimaryButton } from "../components/ui";
-import { CATEGORIES } from "../mockData";
-import { supabaseUploadImage, supabaseInsert } from "../lib/supabase/client";
+import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
+import { TopBar, PrimaryButton } from "../../components/ui";
+import { CATEGORIES } from "../../mockData";
+import { supabaseUploadImage, supabaseInsert } from "../../lib/supabase/client";
 
 export function CreatePostScreen({ myPets, session, userId, onPublish, onCancel }) {
   const [selectedPetId, setSelectedPetId] = useState(myPets[0]?.id || "");

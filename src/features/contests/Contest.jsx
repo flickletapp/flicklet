@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { Award, Sparkles } from "lucide-react";
-import { C, FONT_DISPLAY, FONT_BODY } from "../theme";
-import { TopBar, BlobAvatar } from "../components/ui";
-import { CATEGORIES } from "../mockData";
-import { supabaseSelect, supabaseInsert } from "../lib/supabase/client";
+import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
+import { TopBar, BlobAvatar } from "../../components/ui";
+import { CATEGORIES } from "../../mockData";
+import { supabaseSelect, supabaseInsert } from "../../lib/supabase/client";
 
 async function loadSuggestions(session, userId) {
   const rows = await supabaseSelect("category_suggestions", session?.access_token, "select=id,name,created_at&order=created_at.asc");
