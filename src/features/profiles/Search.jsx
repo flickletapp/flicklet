@@ -3,7 +3,7 @@ import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
 import { TopBar, BlobAvatar, EmptyState } from "../../components/ui";
 import { supabaseSelect } from "../../lib/supabase/client";
 
-async function searchUsers(session, query) {
+export async function searchUsers(session, query) {
   const term = query.trim().replace(/^@/, "");
   if (!term) return [];
   const encoded = encodeURIComponent(term);
