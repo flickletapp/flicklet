@@ -4,7 +4,7 @@ import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
 import { TopBar, BlobAvatar, ErrorBanner } from "../../components/ui";
 import { FollowListModal } from "../../components/modals";
 import { MOCK_FOLLOWERS } from "../../mockData";
-import { supabaseCount, supabaseSelect, supabaseInsert, supabaseDelete, supabaseRpc } from "../../lib/supabase/client";
+import { supabaseCount, supabaseSelect, supabaseDelete, supabaseRpc } from "../../lib/supabase/client";
 import { useHumanFollow } from "./useHumanFollow";
 import { usePetFollow } from "./usePetFollow";
 
@@ -50,7 +50,13 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
   const [listOpen, setListOpen] = useState(null);
   const [counts, setCounts] = useState({ followers: 0, following: 0 });
   const [pets, setPets] = useState([]);
-  const [isBlocked, setIsBlocked] = useState(false);
+  // iBlockedThem: sadece BEN silebilecegim bir blocks satirim var mi
+  // (RLS ile dogrudan gorebiliyorum). blockedEitherWay: iki yonlu
+  // gercek engel durumu - `blocked_with` RPC'si RLS'in gosteremedigi
+  // "onlar beni blockladi" yonunu de kapsar, hangi tarafin blockladigini
+  // ifsa etmeden sadece true/false doner.
+  const [iBlockedThem, setIBlockedThem] = useState(false);
+  const [blockedEitherWay, setBlockedEitherWay] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmBlockOpen, setConfirmBlockOpen] = useState(false);
   const [blockWorking, setBlockWorking] = useState(false);
@@ -67,7 +73,7 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
     onFollowChange: (delta) => setCounts((c) => ({ ...c, followers: Math.max(0, c.followers + delta) })),
   });
 
-  useEffect(() => {
+  const refreshCounts = () => {
     if (!target.authorId) return;
     Promise.all([
       supabaseCount("follows", session?.access_token, `select=follower_id&following_id=eq.${target.authorId}`),
@@ -75,14 +81,28 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
     ])
       .then(([followers, followingCount]) => setCounts({ followers, following: followingCount }))
       .catch(() => {});
+  };
+
+  const refreshBlockState = () => {
+    if (!userId || userId === target.authorId) return;
+    // Kendi olusturdugum blok satirini dogrudan gorebiliyorum (RLS).
+    supabaseSelect("blocks", session?.access_token, `select=blocked_id&blocker_id=eq.${userId}&blocked_id=eq.${target.authorId}`)
+      .then((rows) => setIBlockedThem(rows.length > 0))
+      .catch(() => {});
+    // Iki yonlu gercek durumu (karsi taraf beni blockladiysa da dahil)
+    // SADECE bu RPC ile ogrenebilirim - RLS kendi basina bunu gostermez.
+    supabaseRpc("blocked_with", session?.access_token, { other_user_id: target.authorId })
+      .then(setBlockedEitherWay)
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    if (!target.authorId) return;
+    refreshCounts();
     supabaseSelect("pets", session?.access_token, `select=id,name,emoji&owner_id=eq.${target.authorId}`)
       .then(setPets)
       .catch(() => {});
-    if (userId && userId !== target.authorId) {
-      supabaseSelect("blocks", session?.access_token, `select=blocked_id&blocker_id=eq.${userId}&blocked_id=eq.${target.authorId}`)
-        .then((rows) => setIsBlocked(rows.length > 0))
-        .catch(() => {});
-    }
+    refreshBlockState();
   }, [target.authorId, userId]);
 
   const confirmBlock = async () => {
@@ -90,49 +110,14 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
     setBlockError("");
     setBlockWorking(true);
     try {
-      await supabaseInsert("blocks", session.access_token, { blocker_id: userId, blocked_id: target.authorId });
-
-      // Mevcut RLS'e uygun temizlik: sadece BENIM (blocker) sahip
-      // oldugum satirlari silebilirim/reddedebilirim - karsi tarafin
-      // bana ait takip/istek satirlarini RLS baskasinin silmesine izin
-      // vermiyor (follows_delete: follower_id=auth.uid(),
-      // follow_requests_delete: requester_id=auth.uid()). O yuzden
-      // "beni takip ediyor" veya "bana istek gonderdi" durumlari icin
-      // sadece target_id=auth.uid() olan bekleyen istekleri RPC ile
-      // reddedebiliyorum - dogrudan follows/pet_follows satirini
-      // silemiyorum, bu bilinen bir sinir.
-      const petIds = pets.map((p) => p.id);
-      await Promise.all([
-        supabaseDelete("follows", session.access_token, `follower_id=eq.${userId}&following_id=eq.${target.authorId}`).catch(() => {}),
-        supabaseDelete(
-          "follow_requests",
-          session.access_token,
-          `requester_id=eq.${userId}&target_id=eq.${target.authorId}&pet_id=is.null&status=eq.pending`
-        ).catch(() => {}),
-        petIds.length > 0
-          ? supabaseDelete("pet_follows", session.access_token, `follower_id=eq.${userId}&pet_id=in.(${petIds.join(",")})`).catch(() => {})
-          : Promise.resolve(),
-        petIds.length > 0
-          ? supabaseDelete(
-              "follow_requests",
-              session.access_token,
-              `requester_id=eq.${userId}&pet_id=in.(${petIds.join(",")})&status=eq.pending`
-            ).catch(() => {})
-          : Promise.resolve(),
-      ]);
-
-      const incoming = await supabaseSelect(
-        "follow_requests",
-        session.access_token,
-        `select=id&requester_id=eq.${target.authorId}&target_id=eq.${userId}&status=eq.pending`
-      ).catch(() => []);
-      await Promise.all(
-        incoming.map((r) =>
-          supabaseRpc("respond_to_follow_request", session.access_token, { request_id: r.id, new_status: "rejected" }).catch(() => {})
-        )
-      );
-
-      setIsBlocked(true);
+      // Atomik: blocks satirini ekler VE iki yonlu follows/pet_follows/
+      // bekleyen follow_requests'i tek transaction'da temizler (bkz.
+      // db/migrations/005_block_user_rpc.up.sql) - RLS'in tek basina
+      // izin vermedigi "karsi tarafin bana ait satirlari" da kapsar.
+      await supabaseRpc("block_user", session.access_token, { blocked_user_id: target.authorId });
+      setIBlockedThem(true);
+      setBlockedEitherWay(true);
+      refreshCounts();
     } catch (e) {
       setBlockError(e.message);
     } finally {
@@ -144,8 +129,13 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
     setBlockError("");
     setBlockWorking(true);
     try {
+      // "Kullanıcı engeli kaldırır" RLS'i (blocker_id = auth.uid())
+      // zaten sadece kendi olusturdugum engeli kaldirmama izin veriyor -
+      // ek bir yetki kontrolu gerekmiyor.
       await supabaseDelete("blocks", session.access_token, `blocker_id=eq.${userId}&blocked_id=eq.${target.authorId}`);
-      setIsBlocked(false);
+      setIBlockedThem(false);
+      refreshBlockState();
+      refreshCounts();
     } catch (e) {
       setBlockError(e.message);
     } finally {
@@ -153,32 +143,36 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
     }
   };
 
-  if (isBlocked) {
+  if (blockedEitherWay) {
     return (
       <div>
         <TopBar title={target.human} onBack={onBack} />
         <div style={{ padding: "40px 24px", textAlign: "center", maxWidth: 480, margin: "0 auto" }}>
           <div style={{ fontFamily: FONT_BODY, fontSize: 13.5, color: C.inkSoft, marginBottom: 18, lineHeight: 1.5 }}>
-            {target.human} adlı kullanıcıyı engelledin. Birbirinizi takip edemez, istek gönderemezsiniz.
+            {iBlockedThem
+              ? `${target.human} adlı kullanıcıyı engelledin. Birbirinizi takip edemez, istek gönderemezsiniz.`
+              : "Bu profil şu anda görüntülenemiyor."}
           </div>
           {blockError && <ErrorBanner style={{ marginBottom: 12 }}>{blockError}</ErrorBanner>}
-          <button
-            onClick={unblock}
-            disabled={blockWorking}
-            style={{
-              background: "none",
-              color: C.coral,
-              border: `1.5px solid ${C.coral}`,
-              borderRadius: 10,
-              padding: "10px 18px",
-              fontFamily: FONT_DISPLAY,
-              fontSize: 13,
-              cursor: blockWorking ? "default" : "pointer",
-              opacity: blockWorking ? 0.6 : 1,
-            }}
-          >
-            {blockWorking ? "..." : "Engeli kaldır"}
-          </button>
+          {iBlockedThem && (
+            <button
+              onClick={unblock}
+              disabled={blockWorking}
+              style={{
+                background: "none",
+                color: C.coral,
+                border: `1.5px solid ${C.coral}`,
+                borderRadius: 10,
+                padding: "10px 18px",
+                fontFamily: FONT_DISPLAY,
+                fontSize: 13,
+                cursor: blockWorking ? "default" : "pointer",
+                opacity: blockWorking ? 0.6 : 1,
+              }}
+            >
+              {blockWorking ? "..." : "Engeli kaldır"}
+            </button>
+          )}
         </div>
       </div>
     );

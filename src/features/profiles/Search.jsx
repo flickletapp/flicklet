@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
 import { TopBar, BlobAvatar, EmptyState } from "../../components/ui";
-import { supabaseSelect } from "../../lib/supabase/client";
+import { supabaseSelect, supabaseRpc } from "../../lib/supabase/client";
 
 export async function searchUsers(session, query, viewerUserId) {
   const term = query.trim().replace(/^@/, "");
@@ -13,11 +13,13 @@ export async function searchUsers(session, query, viewerUserId) {
     `select=id,handle,display_name&or=(handle.ilike.*${encoded}*,display_name.ilike.*${encoded}*)&limit=20`
   );
   if (rows.length === 0) return [];
-  // Engellenen kullanicilar aramada gorunmesin (Feed'deki blok filtresiyle
-  // ayni mantik - sadece kendi engel listemi goruyorum, RLS geregi).
+  // Engellenen kullanicilar (HER IKI yonde) aramada gorunmesin. Sadece
+  // kendi `blocks` satirlarima bakmak yetmez (RLS "karsi taraf beni
+  // blockladi" satirini gostermez) - iki yonlu kontrolu SECURITY
+  // DEFINER `blocked_among` RPC'si yapiyor (bkz. 005_block_user_rpc).
   if (viewerUserId) {
-    const blockRows = await supabaseSelect("blocks", session?.access_token, `select=blocked_id&blocker_id=eq.${viewerUserId}`).catch(() => []);
-    const blockedIds = new Set(blockRows.map((b) => b.blocked_id));
+    const blockedRows = await supabaseRpc("blocked_among", session?.access_token, { candidate_ids: rows.map((r) => r.id) }).catch(() => []);
+    const blockedIds = new Set((blockedRows || []).map((b) => b.blocked_id));
     rows = rows.filter((r) => !blockedIds.has(r.id));
   }
   if (rows.length === 0) return [];
