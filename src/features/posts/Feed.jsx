@@ -339,7 +339,7 @@ export function FeedScreen({ session, userId, myName, onOpenComplaint, onOpenPro
   return (
     <div>
       <TopBar
-        title="Flicklet"
+        title={<span style={{ color: C.pine }}>Flicklet</span>}
         right={
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <button onClick={() => (isGuest ? onRequireAuth() : onOpenSearch())} style={{ background: "none", border: "none", cursor: "pointer", color: C.ink, padding: 0, display: "flex" }}>
