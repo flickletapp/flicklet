@@ -4,9 +4,15 @@ import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
 import { TopBar, BlobAvatar, EmptyState, ErrorBanner } from "../../components/ui";
 import { FollowListModal } from "../../components/modals";
 import { MOCK_FOLLOWERS } from "../../mockData";
-import { supabaseUpdate, supabaseCount, supabaseSelect, supabaseUploadImage, supabaseRpc } from "../../lib/supabase/client";
+import { supabaseUpdate, supabaseCount, supabaseSelect, supabaseUploadImage, supabaseRpc, supabaseInsert } from "../../lib/supabase/client";
 
-export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsPrivate, onOpenProfile, onLogout }) {
+const PET_TYPES = [
+  { key: "cat", label: "Kedi", emoji: "🐱" },
+  { key: "dog", label: "Köpek", emoji: "🐶" },
+  { key: "other", label: "Diğer", emoji: "🐾" },
+];
+
+export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsPrivate, onOpenProfile, onLogout, onAddPet }) {
   const [listOpen, setListOpen] = useState(null);
   const [dmPolicy, setDmPolicy] = useState("everyone");
   const [counts, setCounts] = useState({ followers: 0, following: 0, posts: 0 });
@@ -15,7 +21,35 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [requestError, setRequestError] = useState("");
+  const [addingPetOpen, setAddingPetOpen] = useState(false);
+  const [newPetName, setNewPetName] = useState("");
+  const [newPetType, setNewPetType] = useState("cat");
+  const [savingPet, setSavingPet] = useState(false);
+  const [addPetError, setAddPetError] = useState("");
   const avatarInputRef = useRef(null);
+
+  const savePet = async () => {
+    if (!newPetName.trim()) return;
+    setAddPetError("");
+    setSavingPet(true);
+    try {
+      const emoji = PET_TYPES.find((t) => t.key === newPetType)?.emoji || "🐾";
+      const inserted = await supabaseInsert("pets", session.access_token, {
+        owner_id: userId,
+        name: newPetName.trim(),
+        species: newPetType,
+        emoji,
+      });
+      onAddPet && onAddPet(inserted[0]);
+      setNewPetName("");
+      setNewPetType("cat");
+      setAddingPetOpen(false);
+    } catch (e) {
+      setAddPetError(e.message);
+    } finally {
+      setSavingPet(false);
+    }
+  };
 
   const refreshFollowerCount = () => {
     supabaseCount("follows", session?.access_token, `select=follower_id&following_id=eq.${userId}`)
@@ -193,11 +227,68 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
               <span style={{ fontFamily: FONT_BODY, fontWeight: 700, fontSize: 13 }}>{p.name}</span>
             </div>
           ))}
-          <div style={{ display: "flex", alignItems: "center", gap: 6, border: `2px dashed ${C.line}`, borderRadius: 12, padding: "8px 12px", color: C.inkSoft, cursor: "pointer" }}>
+          <div
+            onClick={() => setAddingPetOpen((v) => !v)}
+            style={{ display: "flex", alignItems: "center", gap: 6, border: `2px dashed ${C.line}`, borderRadius: 12, padding: "8px 12px", color: C.inkSoft, cursor: "pointer" }}
+          >
             <Plus size={15} />
             <span style={{ fontFamily: FONT_BODY, fontWeight: 700, fontSize: 13 }}>Ekle</span>
           </div>
         </div>
+
+        {addingPetOpen && (
+          <div style={{ background: C.cream, border: `1px solid ${C.line}`, borderRadius: 14, padding: 14, marginBottom: 22 }}>
+            {addPetError && <ErrorBanner style={{ marginBottom: 8 }}>{addPetError}</ErrorBanner>}
+            <input
+              autoFocus
+              value={newPetName}
+              onChange={(e) => setNewPetName(e.target.value)}
+              placeholder="Hayvanının adı"
+              style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 10, border: `2px solid ${C.line}`, fontFamily: FONT_BODY, fontSize: 13.5, color: C.ink, background: C.paper, outline: "none", marginBottom: 10 }}
+            />
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              {PET_TYPES.map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => setNewPetType(t.key)}
+                  style={{
+                    flex: 1,
+                    padding: "8px 6px",
+                    borderRadius: 10,
+                    border: `2px solid ${newPetType === t.key ? C.mustard : C.line}`,
+                    background: newPetType === t.key ? "#FDF1D8" : C.paper,
+                    fontFamily: FONT_BODY,
+                    fontWeight: 700,
+                    fontSize: 12,
+                    color: C.ink,
+                    cursor: "pointer",
+                  }}
+                >
+                  <div style={{ fontSize: 16 }}>{t.emoji}</div>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={savePet}
+                disabled={!newPetName.trim() || savingPet}
+                style={{ flex: 1, background: C.pine, color: C.cream, border: "none", borderRadius: 10, padding: "10px 12px", fontFamily: FONT_DISPLAY, fontSize: 13, cursor: !newPetName.trim() || savingPet ? "default" : "pointer", opacity: !newPetName.trim() || savingPet ? 0.6 : 1 }}
+              >
+                {savingPet ? "Ekleniyor..." : "Kaydet"}
+              </button>
+              <button
+                onClick={() => {
+                  setAddingPetOpen(false);
+                  setAddPetError("");
+                }}
+                style={{ background: "none", color: C.inkSoft, border: `1.5px solid ${C.line}`, borderRadius: 10, padding: "10px 12px", fontFamily: FONT_DISPLAY, fontSize: 13, cursor: "pointer" }}
+              >
+                Vazgeç
+              </button>
+            </div>
+          </div>
+        )}
 
         <div style={{ display: "flex", gap: 10, marginBottom: 22 }}>
           <div onClick={() => setListOpen("followers")} style={{ flex: 1, textAlign: "center", background: C.cream, border: `1px solid ${C.line}`, borderRadius: 14, padding: "12px 0", cursor: "pointer" }}>

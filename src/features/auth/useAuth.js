@@ -91,6 +91,10 @@ export function useAuth() {
     setPhase("auth");
   };
 
+  const addPet = (pet) => {
+    setMyPets((cur) => [...cur, pet]);
+  };
+
   return {
     phase,
     session,
@@ -105,5 +109,6 @@ export function useAuth() {
     enterGuestMode,
     completeOnboarding,
     goToSignup,
+    addPet,
   };
 }
