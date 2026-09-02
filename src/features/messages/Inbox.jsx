@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
-import { TopBar, BlobAvatar } from "../../components/ui";
+import { TopBar, BlobAvatar, LoadingState, EmptyState } from "../../components/ui";
 import { supabaseSelect } from "../../lib/supabase/client";
 
 async function loadConversations(session, userId) {
@@ -59,9 +59,7 @@ export function InboxScreen({ session, userId, onBack, onOpenChat }) {
     <div>
       <TopBar title="Mesajlar" onBack={onBack} />
       <div style={{ padding: "8px 10px", maxWidth: 480, margin: "0 auto" }}>
-        {loading && (
-          <div style={{ textAlign: "center", padding: "40px 20px", fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft }}>Yükleniyor...</div>
-        )}
+        {loading && <LoadingState padding="40px 20px" />}
         {!loading &&
           conversations.map((c) => (
             <div key={c.targetId} onClick={() => onOpenChat(c)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 10px", borderRadius: 14, cursor: "pointer" }}>
@@ -75,9 +73,7 @@ export function InboxScreen({ session, userId, onBack, onOpenChat }) {
               {c.unread && <div style={{ width: 9, height: 9, borderRadius: "50%", background: C.coral, flexShrink: 0 }} />}
             </div>
           ))}
-        {!loading && conversations.length === 0 && (
-          <div style={{ textAlign: "center", padding: "40px 20px", fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft }}>Henüz bir mesajın yok.</div>
-        )}
+        {!loading && conversations.length === 0 && <EmptyState padding="40px 20px">Henüz bir mesajın yok.</EmptyState>}
       </div>
     </div>
   );

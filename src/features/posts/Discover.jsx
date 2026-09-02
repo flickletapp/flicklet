@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Heart } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
-import { TopBar } from "../../components/ui";
+import { TopBar, LoadingState, EmptyState } from "../../components/ui";
 import { CATEGORIES } from "../../mockData";
 import { loadFeed, PostCard } from "./Feed";
 
@@ -75,9 +75,7 @@ export function DiscoverScreen({ session, userId, myName, onOpenProfile, onOpenC
         </div>
       </div>
 
-      {loading && (
-        <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, textAlign: "center", padding: "30px 0" }}>Yükleniyor...</div>
-      )}
+      {loading && <LoadingState />}
 
       <div style={{ padding: "0 10px 90px", maxWidth: 480, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
         {shown.map((p) => (
@@ -95,9 +93,9 @@ export function DiscoverScreen({ session, userId, myName, onOpenProfile, onOpenC
           </div>
         ))}
         {!loading && shown.length === 0 && (
-          <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "40px 0", fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft }}>
+          <EmptyState padding="40px 0" style={{ gridColumn: "1 / -1" }}>
             Bu filtrede henüz gönderi yok.
-          </div>
+          </EmptyState>
         )}
       </div>
     </div>

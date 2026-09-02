@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
-import { TopBar, BlobAvatar } from "../../components/ui";
+import { TopBar, BlobAvatar, EmptyState } from "../../components/ui";
 import { supabaseSelect } from "../../lib/supabase/client";
 
 async function searchUsers(session, query) {
@@ -65,21 +65,11 @@ export function SearchScreen({ session, onBack, onOpenProfile }) {
           />
         </div>
 
-        {!q && (
-          <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, textAlign: "center", padding: "30px 0" }}>
-            Bir kullanıcı adı yazmaya başla 🔍
-          </div>
-        )}
+        {!q && <EmptyState>Bir kullanıcı adı yazmaya başla 🔍</EmptyState>}
 
-        {q && loading && (
-          <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, textAlign: "center", padding: "30px 0" }}>Aranıyor...</div>
-        )}
+        {q && loading && <EmptyState>Aranıyor...</EmptyState>}
 
-        {q && !loading && results.length === 0 && (
-          <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, textAlign: "center", padding: "30px 0" }}>
-            "{q}" ile eşleşen kimse bulunamadı.
-          </div>
-        )}
+        {q && !loading && results.length === 0 && <EmptyState>"{q}" ile eşleşen kimse bulunamadı.</EmptyState>}
 
         {results.map((u) => (
           <div key={u.authorId} onClick={() => onOpenProfile(u)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 8px", borderRadius: 14, cursor: "pointer" }}>

@@ -1,6 +1,38 @@
 import { ChevronLeft, Home, Compass, Plus, Trophy, User } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../theme";
 
+// Ekranlarda tekrarlanan yükleniyor/boş/hata durumları için ortak bileşenler.
+export function LoadingState({ padding = "30px 0" }) {
+  return (
+    <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, textAlign: "center", padding }}>Yükleniyor...</div>
+  );
+}
+
+export function EmptyState({ children, padding = "30px 0", style }) {
+  return (
+    <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, textAlign: "center", padding, ...style }}>{children}</div>
+  );
+}
+
+export function ErrorBanner({ children, style }) {
+  return (
+    <div
+      style={{
+        background: "#FDECEA",
+        color: "#C0392B",
+        padding: "10px 14px",
+        borderRadius: 10,
+        fontFamily: FONT_BODY,
+        fontSize: 12.5,
+        marginBottom: 14,
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 export function PawBadge({ children, color = C.mustard }) {
   return (
     <span

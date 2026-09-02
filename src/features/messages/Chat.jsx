@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Send } from "lucide-react";
 import { C, FONT_BODY } from "../../theme";
-import { TopBar, BlobAvatar } from "../../components/ui";
+import { TopBar, BlobAvatar, LoadingState, EmptyState } from "../../components/ui";
 import { supabaseSelect, supabaseInsert, supabaseUpdate } from "../../lib/supabase/client";
 
 export function ChatScreen({ conversation, session, userId, onBack }) {
@@ -52,14 +52,8 @@ export function ChatScreen({ conversation, session, userId, onBack }) {
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
       <TopBar title={conversation.human} onBack={onBack} right={<BlobAvatar emoji={conversation.petEmoji} size={30} color={conversation.color} />} />
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 14px", maxWidth: 480, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
-        {loading && (
-          <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, textAlign: "center", padding: "20px 0" }}>Yükleniyor...</div>
-        )}
-        {!loading && messages.length === 0 && (
-          <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, textAlign: "center", padding: "20px 0" }}>
-            Henüz mesaj yok, ilk mesajı sen yaz.
-          </div>
-        )}
+        {loading && <LoadingState padding="20px 0" />}
+        {!loading && messages.length === 0 && <EmptyState padding="20px 0">Henüz mesaj yok, ilk mesajı sen yaz.</EmptyState>}
         {messages.map((m) => (
           <div key={m.id} style={{ display: "flex", justifyContent: m.sender_id === userId ? "flex-end" : "flex-start", marginBottom: 10 }}>
             <div

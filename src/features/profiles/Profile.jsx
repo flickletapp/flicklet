@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Lock, Globe, Plus, Camera, LogOut } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
-import { TopBar, BlobAvatar } from "../../components/ui";
+import { TopBar, BlobAvatar, EmptyState } from "../../components/ui";
 import { FollowListModal } from "../../components/modals";
 import { MOCK_FOLLOWERS } from "../../mockData";
 import { supabaseUpdate, supabaseCount, supabaseSelect, supabaseUploadImage } from "../../lib/supabase/client";
@@ -187,9 +187,7 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
 
         <div style={{ fontFamily: FONT_DISPLAY, fontSize: 14, color: C.ink, margin: "22px 0 10px" }}>Gönderilerim</div>
         {myPosts.length === 0 ? (
-          <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, textAlign: "center", padding: "20px 0" }}>
-            Henüz gönderin yok.
-          </div>
+          <EmptyState padding="20px 0">Henüz gönderin yok.</EmptyState>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
             {myPosts.map((p) =>

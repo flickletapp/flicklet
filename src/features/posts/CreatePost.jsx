@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { Camera, Trophy } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
-import { TopBar, PrimaryButton } from "../../components/ui";
+import { TopBar, PrimaryButton, ErrorBanner } from "../../components/ui";
 import { CATEGORIES } from "../../mockData";
 import { supabaseUploadImage, supabaseInsert } from "../../lib/supabase/client";
 
@@ -111,11 +111,7 @@ export function CreatePostScreen({ myPets, session, userId, onPublish, onCancel 
           )}
         </div>
 
-        {error && (
-          <div style={{ background: "#FDECEA", color: "#C0392B", padding: "10px 14px", borderRadius: 10, fontFamily: FONT_BODY, fontSize: 12.5, marginBottom: 14 }}>
-            {error}
-          </div>
-        )}
+        {error && <ErrorBanner>{error}</ErrorBanner>}
 
         <div style={{ marginBottom: 16 }}>
           <span style={{ fontFamily: FONT_BODY, fontSize: 13, fontWeight: 700, color: C.inkSoft }}>Hangi dostun?</span>

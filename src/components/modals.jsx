@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../theme";
-import { BlobAvatar, PrimaryButton } from "./ui";
+import { BlobAvatar, PrimaryButton, LoadingState, EmptyState } from "./ui";
 import { supabaseSelect, supabaseInsert } from "../lib/supabase/client";
 
 export function FollowListModal({ title, list, onClose, onOpenProfile }) {
@@ -132,16 +132,8 @@ export function CommentsModal({ post, session, userId, myName, onClose, onCommen
         </div>
 
         <div style={{ overflowY: "auto", flex: 1, marginBottom: 12 }}>
-          {loading && (
-            <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, textAlign: "center", padding: "20px 0" }}>
-              Yükleniyor...
-            </div>
-          )}
-          {!loading && comments.length === 0 && (
-            <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, textAlign: "center", padding: "20px 0" }}>
-              Henüz yorum yok, ilk yorumu sen yaz.
-            </div>
-          )}
+          {loading && <LoadingState padding="20px 0" />}
+          {!loading && comments.length === 0 && <EmptyState padding="20px 0">Henüz yorum yok, ilk yorumu sen yaz.</EmptyState>}
           {comments.map((c, i) => (
             <div key={i} style={{ display: "flex", gap: 10, marginBottom: 14 }}>
               <BlobAvatar emoji="🙂" size={32} color={C.pine} />

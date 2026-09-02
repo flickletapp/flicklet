@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
-import { TextField, PrimaryButton } from "../../components/ui";
+import { TextField, PrimaryButton, ErrorBanner } from "../../components/ui";
 import { supabaseUpdate, supabaseInsert } from "../../lib/supabase/client";
 
 export function ProfileSetupScreen({ onDone, session, userId }) {
@@ -64,21 +64,7 @@ export function ProfileSetupScreen({ onDone, session, userId }) {
         ))}
       </div>
 
-      {error && (
-        <div
-          style={{
-            background: "#FDECEA",
-            color: "#C0392B",
-            padding: "10px 14px",
-            borderRadius: 10,
-            fontFamily: FONT_BODY,
-            fontSize: 12.5,
-            marginBottom: 14,
-          }}
-        >
-          {error}
-        </div>
-      )}
+      {error && <ErrorBanner>{error}</ErrorBanner>}
 
       {step === 1 && (
         <>

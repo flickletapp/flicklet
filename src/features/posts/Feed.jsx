@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Heart, MessageCircle, Trophy, Flag, X, Search, Mail, Flame, Plus } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
-import { TopBar, BlobAvatar, PawBadge } from "../../components/ui";
+import { TopBar, BlobAvatar, PawBadge, LoadingState, EmptyState, ErrorBanner } from "../../components/ui";
 import { CommentsModal } from "../../components/modals";
 import { TRENDING } from "../../mockData";
 import { supabaseSelect, supabaseInsert, supabaseUpsert, supabaseDelete, supabaseCount } from "../../lib/supabase/client";
@@ -383,17 +383,9 @@ export function FeedScreen({ session, userId, myName, onOpenComplaint, onOpenPro
       )}
 
       <div style={{ padding: "16px 14px 90px", maxWidth: 480, margin: "0 auto" }}>
-        {loading && (
-          <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, textAlign: "center", padding: "30px 0" }}>Yükleniyor...</div>
-        )}
-        {!loading && error && (
-          <div style={{ background: "#FDECEA", color: "#C0392B", padding: "12px 14px", borderRadius: 10, fontFamily: FONT_BODY, fontSize: 12.5, marginBottom: 14 }}>{error}</div>
-        )}
-        {!loading && !error && posts.length === 0 && (
-          <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, textAlign: "center", padding: "30px 0" }}>
-            Henüz gönderi yok — ilk flick'i sen at 🐾
-          </div>
-        )}
+        {loading && <LoadingState />}
+        {!loading && error && <ErrorBanner style={{ padding: "12px 14px" }}>{error}</ErrorBanner>}
+        {!loading && !error && posts.length === 0 && <EmptyState>Henüz gönderi yok — ilk flick'i sen at 🐾</EmptyState>}
         {posts.map((p) => (
           <PostCard
             key={p.id}

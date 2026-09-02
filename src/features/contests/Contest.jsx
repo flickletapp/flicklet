@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Award, Sparkles } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
-import { TopBar, BlobAvatar } from "../../components/ui";
+import { TopBar, BlobAvatar, LoadingState, EmptyState } from "../../components/ui";
 import { CATEGORIES } from "../../mockData";
 import { supabaseSelect, supabaseInsert } from "../../lib/supabase/client";
 
@@ -166,14 +166,8 @@ export function ContestScreen({ session, userId, isGuest, onRequireAuth }) {
           </div>
 
           <div style={{ fontFamily: FONT_DISPLAY, fontSize: 15, color: C.ink, marginBottom: 10 }}>Sıralama — {activeCat}</div>
-          {loadingBoard && (
-            <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, textAlign: "center", padding: "20px 0" }}>Yükleniyor...</div>
-          )}
-          {!loadingBoard && board.length === 0 && (
-            <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, textAlign: "center", padding: "20px 0" }}>
-              Bu kategoride henüz gönderi yok.
-            </div>
-          )}
+          {loadingBoard && <LoadingState padding="20px 0" />}
+          {!loadingBoard && board.length === 0 && <EmptyState padding="20px 0">Bu kategoride henüz gönderi yok.</EmptyState>}
           {board.map((r, i) => (
             <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 12, background: C.cream, border: `1px solid ${C.line}`, borderRadius: 14, padding: "10px 14px", marginBottom: 8 }}>
               <div style={{ fontFamily: FONT_DISPLAY, fontSize: 14, width: 24, textAlign: "center", color: i === 0 ? C.mustard : C.inkSoft }}>{i + 1}</div>
@@ -207,13 +201,9 @@ export function ContestScreen({ session, userId, isGuest, onRequireAuth }) {
             </button>
           </div>
 
-          {loadingSuggestions && (
-            <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, textAlign: "center", padding: "20px 0" }}>Yükleniyor...</div>
-          )}
+          {loadingSuggestions && <LoadingState padding="20px 0" />}
           {!loadingSuggestions && suggestions.length === 0 && (
-            <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, textAlign: "center", padding: "20px 0" }}>
-              Henüz kategori önerisi yok — ilk öneriyi sen yap.
-            </div>
+            <EmptyState padding="20px 0">Henüz kategori önerisi yok — ilk öneriyi sen yap.</EmptyState>
           )}
           {suggestions
             .slice()
