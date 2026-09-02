@@ -6,7 +6,7 @@ import { CATEGORIES } from "../../mockData";
 import { supabaseUploadImage, supabaseInsert, supabaseDelete } from "../../lib/supabase/client";
 
 export function CreatePostScreen({ myPets, session, userId, onPublish, onCancel }) {
-  const [selectedPetId, setSelectedPetId] = useState(myPets[0]?.id || "");
+  const [selectedPetIds, setSelectedPetIds] = useState(myPets[0]?.id ? [myPets[0].id] : []);
   const [caption, setCaption] = useState("");
   const [contestOn, setContestOn] = useState(false);
   const [category, setCategory] = useState(CATEGORIES[0]);
@@ -16,7 +16,15 @@ export function CreatePostScreen({ myPets, session, userId, onPublish, onCancel 
   const [error, setError] = useState("");
   const fileInputRef = useRef(null);
 
-  const selectedPet = myPets.find((p) => p.id === selectedPetId);
+  const togglePet = (petId) => {
+    setSelectedPetIds((cur) => (cur.includes(petId) ? cur.filter((id) => id !== petId) : [...cur, petId]));
+  };
+
+  // Secim sirasi korunuyor: myPets uzerinden filtrelemek yerine
+  // selectedPetIds'in kendi sirasini kullaniyoruz.
+  const selectedPets = selectedPetIds
+    .map((id) => myPets.find((p) => p.id === id))
+    .filter(Boolean);
 
   const handleFileChange = (e) => {
     const f = e.target.files?.[0];
@@ -64,24 +72,29 @@ export function CreatePostScreen({ myPets, session, userId, onPublish, onCancel 
       }
       const inserted = await supabaseInsert("posts", session.access_token, {
         author_id: userId,
-        pet_id: selectedPet?.id || null,
+        // Gecici geriye donuk uyumluluk: posts.pet_id'ye SADECE ilk
+        // secilen pet yaziliyor, tam liste post_pets'e gidiyor.
+        pet_id: selectedPets[0]?.id || null,
         caption,
         image_url: imageUrl,
         contest_category: contestOn ? category : null,
       });
       const newPost = inserted[0];
 
-      // Asama 2 gecici dual-write: posts.pet_id hala tek dogru kaynak,
-      // ayrica post_pets'e de yaziliyor (cok-pet göcü icin altyapi).
-      // Bu adim basarisiz olursa yarim (pet baglantisiz) bir post feed'de
+      // Asama 2 gecici dual-write: posts.pet_id hala tek dogru kaynak
+      // (ilk pet), ayrica SECILEN TUM petler post_pets'e yaziliyor
+      // (cok-pet göcü icin altyapi). Herhangi bir post_pets yazimi
+      // basarisiz olursa yarim (eksik pet baglantili) bir post feed'de
       // sessizce kalmasin diye post geri siliniyor ve kullaniciya acik
       // hata gosteriliyor - tekrar denemesi gerekiyor.
-      if (selectedPet?.id) {
+      if (selectedPets.length > 0) {
         try {
-          await supabaseInsert("post_pets", session.access_token, {
-            post_id: newPost.id,
-            pet_id: selectedPet.id,
-          });
+          for (const pet of selectedPets) {
+            await supabaseInsert("post_pets", session.access_token, {
+              post_id: newPost.id,
+              pet_id: pet.id,
+            });
+          }
         } catch (ppError) {
           try {
             await supabaseDelete("posts", session.access_token, `id=eq.${newPost.id}`);
@@ -137,20 +150,20 @@ export function CreatePostScreen({ myPets, session, userId, onPublish, onCancel 
         {error && <ErrorBanner>{error}</ErrorBanner>}
 
         <div style={{ marginBottom: 16 }}>
-          <span style={{ fontFamily: FONT_BODY, fontSize: 13, fontWeight: 700, color: C.inkSoft }}>Hangi dostun?</span>
+          <span style={{ fontFamily: FONT_BODY, fontSize: 13, fontWeight: 700, color: C.inkSoft }}>Hangi dostların? (birden fazla seçebilirsin, isteğe bağlı)</span>
           <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
             {myPets.map((p) => (
               <button
                 key={p.id || p.name}
-                onClick={() => setSelectedPetId((cur) => (cur === p.id ? "" : p.id))}
+                onClick={() => togglePet(p.id)}
                 style={{
                   display: "flex",
                   alignItems: "center",
                   gap: 6,
                   padding: "8px 12px",
                   borderRadius: 12,
-                  border: `2px solid ${selectedPetId === p.id ? C.mustard : C.line}`,
-                  background: selectedPetId === p.id ? "#FDF1D8" : C.cream,
+                  border: `2px solid ${selectedPetIds.includes(p.id) ? C.mustard : C.line}`,
+                  background: selectedPetIds.includes(p.id) ? "#FDF1D8" : C.cream,
                   fontFamily: FONT_BODY,
                   fontWeight: 700,
                   fontSize: 13,
