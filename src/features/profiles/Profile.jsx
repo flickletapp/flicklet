@@ -41,23 +41,27 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
         if (rows[0]?.dm_policy) setDmPolicy(rows[0].dm_policy);
       })
       .catch(() => {});
-    // Sadece insan takip istekleri (pet_id=null) - pet takip istekleri
-    // Asama 7'nin isi, simdilik gosterilmiyor.
+    // Hem insan (pet_id=null) hem pet takip istekleri - ayni RPC ile
+    // yonetiliyor, pet_id'ye gore farkli metinle gosteriliyor.
     supabaseSelect(
       "follow_requests",
       session?.access_token,
-      `select=id,profiles!follow_requests_requester_id_fkey(display_name,handle,avatar_url)&target_id=eq.${userId}&pet_id=is.null&status=eq.pending&order=created_at.desc`
+      `select=id,pet_id,profiles!follow_requests_requester_id_fkey(display_name,handle,avatar_url),pets(name,emoji)&target_id=eq.${userId}&status=eq.pending&order=created_at.desc`
     )
       .then(setPendingRequests)
       .catch(() => {});
   }, [userId]);
 
-  const respondToRequest = async (requestId, newStatus) => {
+  const respondToRequest = async (requestId, newStatus, isPetRequest) => {
     setRequestError("");
     try {
       await supabaseRpc("respond_to_follow_request", session.access_token, { request_id: requestId, new_status: newStatus });
       setPendingRequests((cur) => cur.filter((r) => r.id !== requestId));
-      if (newStatus === "accepted") refreshFollowerCount();
+      // Insan istegi kabul edilince kendi takipci sayacimiz artiyor.
+      // Pet istegi kabul edilince ilgili pet_follows kaydi olusuyor
+      // (RPC tarafinda) - bu ekranda pet basina takipci sayaci
+      // gosterilmedigi icin ayrica yenilenecek bir sayac yok.
+      if (newStatus === "accepted" && !isPetRequest) refreshFollowerCount();
     } catch (e) {
       setRequestError(e.message);
     }
@@ -153,17 +157,25 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
                   <BlobAvatar emoji="🙂" size={40} color={C.pine} />
                 )}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontFamily: FONT_DISPLAY, fontSize: 13.5, color: C.ink }}>{r.profiles?.display_name || "Kullanıcı"}</div>
-                  {r.profiles?.handle && <div style={{ fontFamily: FONT_BODY, fontSize: 11.5, color: C.inkSoft }}>{r.profiles.handle}</div>}
+                  {r.pet_id ? (
+                    <div style={{ fontFamily: FONT_DISPLAY, fontSize: 13.5, color: C.ink }}>
+                      {r.profiles?.display_name || "Kullanıcı"}, {r.pets?.emoji || "🐾"} {r.pets?.name || "dostu"} adlı dostunu takip etmek istiyor
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ fontFamily: FONT_DISPLAY, fontSize: 13.5, color: C.ink }}>{r.profiles?.display_name || "Kullanıcı"}</div>
+                      {r.profiles?.handle && <div style={{ fontFamily: FONT_BODY, fontSize: 11.5, color: C.inkSoft }}>{r.profiles.handle}</div>}
+                    </>
+                  )}
                 </div>
                 <button
-                  onClick={() => respondToRequest(r.id, "accepted")}
+                  onClick={() => respondToRequest(r.id, "accepted", !!r.pet_id)}
                   style={{ background: C.pine, color: C.cream, border: "none", borderRadius: 10, padding: "7px 12px", fontFamily: FONT_DISPLAY, fontSize: 12, cursor: "pointer" }}
                 >
                   Kabul et
                 </button>
                 <button
-                  onClick={() => respondToRequest(r.id, "rejected")}
+                  onClick={() => respondToRequest(r.id, "rejected", !!r.pet_id)}
                   style={{ background: "none", color: C.inkSoft, border: `1.5px solid ${C.line}`, borderRadius: 10, padding: "7px 12px", fontFamily: FONT_DISPLAY, fontSize: 12, cursor: "pointer" }}
                 >
                   Reddet
