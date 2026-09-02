@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../theme";
-import { BlobAvatar, PrimaryButton, LoadingState, EmptyState } from "./ui";
+import { BlobAvatar, PrimaryButton, LoadingState, EmptyState, ErrorBanner } from "./ui";
 import { supabaseSelect, supabaseInsert } from "../lib/supabase/client";
 
-export function FollowListModal({ title, list, onClose, onOpenProfile }) {
+export function FollowListModal({ title, list, loading, error, onClose, onOpenProfile }) {
   return (
     <div
       style={{
@@ -36,22 +36,31 @@ export function FollowListModal({ title, list, onClose, onOpenProfile }) {
             <X size={20} />
           </button>
         </div>
-        {list.map((u) => (
-          <div
-            key={u.handle}
-            onClick={() => {
-              onClose();
-              onOpenProfile(u);
-            }}
-            style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 4px", cursor: "pointer" }}
-          >
-            <BlobAvatar emoji={u.petEmoji} color={u.color} size={40} />
-            <div>
-              <div style={{ fontFamily: FONT_DISPLAY, fontSize: 13.5, color: C.ink }}>{u.human}</div>
-              <div style={{ fontFamily: FONT_BODY, fontSize: 11.5, color: C.inkSoft }}>{u.handle}</div>
+        {loading && <LoadingState padding="20px 0" />}
+        {!loading && error && <ErrorBanner>{error}</ErrorBanner>}
+        {!loading && !error && list.length === 0 && <EmptyState padding="20px 0">Henüz kimse yok.</EmptyState>}
+        {!loading &&
+          !error &&
+          list.map((u) => (
+            <div
+              key={u.authorId || u.handle}
+              onClick={() => {
+                onClose();
+                onOpenProfile(u);
+              }}
+              style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 4px", cursor: "pointer" }}
+            >
+              {u.avatarUrl ? (
+                <img src={u.avatarUrl} alt="" style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} />
+              ) : (
+                <BlobAvatar emoji={u.petEmoji || "🙂"} color={u.color || C.pine} size={40} />
+              )}
+              <div>
+                <div style={{ fontFamily: FONT_DISPLAY, fontSize: 13.5, color: C.ink }}>{u.human}</div>
+                <div style={{ fontFamily: FONT_BODY, fontSize: 11.5, color: C.inkSoft }}>{u.handle}</div>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
       </div>
     </div>
   );

@@ -3,7 +3,6 @@ import { Lock, Globe, Plus, Camera, LogOut } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
 import { TopBar, BlobAvatar, EmptyState, ErrorBanner } from "../../components/ui";
 import { FollowListModal } from "../../components/modals";
-import { MOCK_FOLLOWERS } from "../../mockData";
 import { supabaseUpdate, supabaseCount, supabaseSelect, supabaseUploadImage, supabaseRpc, supabaseInsert, supabaseDelete } from "../../lib/supabase/client";
 
 const PET_TYPES = [
@@ -30,7 +29,40 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
   const [blockedError, setBlockedError] = useState("");
   const [confirmUnblockId, setConfirmUnblockId] = useState(null);
   const [unblockingId, setUnblockingId] = useState(null);
+  const [followListData, setFollowListData] = useState([]);
+  const [followListLoading, setFollowListLoading] = useState(false);
+  const [followListError, setFollowListError] = useState("");
   const avatarInputRef = useRef(null);
+
+  // `follows` tablosunun profiles'a IKI ayri FK'si var (follower_id ve
+  // following_id) - hangi yonu istedigimizi acikca belirtmezsek
+  // PostgREST "birden fazla iliski bulundu" hatasi verir. Constraint
+  // adlari migration dosyasindan (001_baseline_schema.sql) dogrulandi,
+  // tahmin edilmedi: follows_follower_id_fkey / follows_following_id_fkey.
+  const openFollowList = (kind) => {
+    setListOpen(kind);
+    setFollowListError("");
+    setFollowListLoading(true);
+    const query =
+      kind === "followers"
+        ? `select=follower_id,profiles!follows_follower_id_fkey(display_name,handle,avatar_url)&following_id=eq.${userId}`
+        : `select=following_id,profiles!follows_following_id_fkey(display_name,handle,avatar_url)&follower_id=eq.${userId}`;
+    supabaseSelect("follows", session?.access_token, query)
+      .then((rows) => {
+        const mapped = rows.map((r) => {
+          const p = r.profiles || {};
+          return {
+            authorId: kind === "followers" ? r.follower_id : r.following_id,
+            human: p.display_name || "Kullanıcı",
+            handle: p.handle || "",
+            avatarUrl: p.avatar_url || null,
+          };
+        });
+        setFollowListData(mapped);
+      })
+      .catch((e) => setFollowListError(e.message))
+      .finally(() => setFollowListLoading(false));
+  };
 
   const refreshBlockedUsers = () => {
     // RLS ("Kullanıcı kendi engel listesini görür") zaten sadece
@@ -324,11 +356,11 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
         )}
 
         <div style={{ display: "flex", gap: 10, marginBottom: 22 }}>
-          <div onClick={() => setListOpen("followers")} style={{ flex: 1, textAlign: "center", background: C.cream, border: `1px solid ${C.line}`, borderRadius: 14, padding: "12px 0", cursor: "pointer" }}>
+          <div onClick={() => openFollowList("followers")} style={{ flex: 1, textAlign: "center", background: C.cream, border: `1px solid ${C.line}`, borderRadius: 14, padding: "12px 0", cursor: "pointer" }}>
             <div style={{ fontFamily: FONT_DISPLAY, fontSize: 17, color: C.ink }}>{counts.followers}</div>
             <div style={{ fontFamily: FONT_BODY, fontSize: 11, color: C.inkSoft }}>Takipçi</div>
           </div>
-          <div onClick={() => setListOpen("following")} style={{ flex: 1, textAlign: "center", background: C.cream, border: `1px solid ${C.line}`, borderRadius: 14, padding: "12px 0", cursor: "pointer" }}>
+          <div onClick={() => openFollowList("following")} style={{ flex: 1, textAlign: "center", background: C.cream, border: `1px solid ${C.line}`, borderRadius: 14, padding: "12px 0", cursor: "pointer" }}>
             <div style={{ fontFamily: FONT_DISPLAY, fontSize: 17, color: C.ink }}>{counts.following}</div>
             <div style={{ fontFamily: FONT_BODY, fontSize: 11, color: C.inkSoft }}>Takip</div>
           </div>
@@ -483,7 +515,9 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
       {listOpen && (
         <FollowListModal
           title={listOpen === "followers" ? "Takipçiler" : "Takip Edilenler"}
-          list={MOCK_FOLLOWERS}
+          list={followListData}
+          loading={followListLoading}
+          error={followListError}
           onClose={() => setListOpen(null)}
           onOpenProfile={(u) => {
             setListOpen(null);
