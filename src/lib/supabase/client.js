@@ -1,6 +1,18 @@
 // SDK yerine doğrudan fetch ile REST API kullanılıyor (bilinçli tercih).
-export const SUPABASE_URL = "https://kxgjlfdcaelcpceuiczc.supabase.co";
-export const SUPABASE_KEY = "sb_publishable_MQZzAS0RloUDP_HCv--rfw__xAHbaM9";
+// URL/anahtar ortam değişkeninden geliyor - build zamanında (Vercel'de
+// Production/Preview/Development ortamları için ayrı ayrı tanımlanabilir,
+// böylece Preview staging'e, Production kendi projesine bağlanabilir).
+// Biri eksikse SESSİZCE production'a fallback YAPILMAZ - acik bir
+// yapilandirma hatasi firlatilir.
+export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+export const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  throw new Error(
+    "Yapılandırma hatası: VITE_SUPABASE_URL ve VITE_SUPABASE_PUBLISHABLE_KEY ortam değişkenleri tanımlı değil. " +
+      ".env dosyasını kontrol et (bkz. .env.example)."
+  );
+}
 
 export async function supabaseAuth(path, body) {
   const res = await fetch(`${SUPABASE_URL}/auth/v1/${path}`, {
