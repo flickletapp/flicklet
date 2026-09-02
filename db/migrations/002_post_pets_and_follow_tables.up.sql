@@ -64,6 +64,27 @@ insert into post_pets (post_id, pet_id)
   where pet_id is not null
   on conflict (post_id, pet_id) do nothing;
 
+-- Backfill dogrulamasi: eksik/fazla varsa SADECE RAPORLAMA degil, hata
+-- ver ve transaction'i geri al (rollback). Sessizce yarim kalmis veriyle
+-- devam etmeyelim.
+do $$
+declare
+  expected_count integer;
+  matched_count integer;
+begin
+  select count(*) into expected_count from posts where pet_id is not null;
+  select count(*) into matched_count
+    from posts p
+    where p.pet_id is not null
+      and exists (select 1 from post_pets pp where pp.post_id = p.id and pp.pet_id = p.pet_id);
+  if expected_count <> matched_count then
+    raise exception
+      'post_pets backfill tutarsiz: posts.pet_id dolu % satirdan sadece % tanesi post_pets''e tasindi. '
+      'Migration durduruldu ve geri alindi (rollback).',
+      expected_count, matched_count;
+  end if;
+end $$;
+
 create index if not exists post_pets_pet_id_idx on post_pets (pet_id);
 
 
@@ -174,9 +195,17 @@ create index if not exists follow_requests_pending_target_idx
 -- ---------------------------------------------------------------------
 -- STEP 4: follow_requests'i kabul/red eden guvenli RPC fonksiyonu.
 -- SECURITY DEFINER + sabit search_path (arama yolu ele gecirme
--- saldirisina karsi standart onlem). Sadece target_id = cagiran
--- kullanici olan, hala 'pending' olan istekleri isler; kabul edilirse
--- follows kaydini AYNI transaction icinde olusturur.
+-- saldirisina karsi standart onlem, ayrica tablo adlari asagida
+-- `public.` ile acikca nitelendi - search_path ayarina tek basina
+-- guvenmek yerine cift koruma). Sadece target_id = cagiran kullanici
+-- olan, hala 'pending' olan istekleri isler; kabul edilirse follows
+-- kaydini AYNI transaction icinde olusturur.
+--
+-- ONEMLI: SECURITY DEFINER oldugu icin bu fonksiyonun icindeki
+-- `insert into follows` cagiran kullanicinin RLS policy'lerini
+-- (follows_insert - self-follow/blok kontrolu) BYPASS EDER. Bu yuzden
+-- ayni kontrolleri (self-follow, mevcut takip, iki yonlu blok) burada
+-- ACIKCA TEKRAR yapiyoruz - sadece RLS'e guvenmiyoruz.
 -- ---------------------------------------------------------------------
 create or replace function respond_to_follow_request(request_id uuid, new_status text)
 returns void
@@ -185,13 +214,13 @@ security definer
 set search_path = public
 as $$
 declare
-  req follow_requests%rowtype;
+  req public.follow_requests%rowtype;
 begin
   if new_status not in ('accepted', 'rejected') then
     raise exception 'gecersiz durum: % (sadece accepted/rejected kabul edilir)', new_status;
   end if;
 
-  select * into req from follow_requests where id = request_id for update;
+  select * into req from public.follow_requests where id = request_id for update;
   if not found then
     raise exception 'istek bulunamadi: %', request_id;
   end if;
@@ -202,17 +231,37 @@ begin
     raise exception 'istek zaten % durumunda, tekrar islenemez', req.status;
   end if;
 
-  update follow_requests set status = new_status where id = request_id;
+  update public.follow_requests set status = new_status where id = request_id;
 
   if new_status = 'accepted' then
-    insert into follows (follower_id, following_id)
+    -- RLS bypass edildigi icin follows_insert'teki kontrolleri burada
+    -- tekrar yapiyoruz: self-follow, mevcut takip, iki yonlu blok.
+    if req.requester_id = req.target_id then
+      raise exception 'gecersiz durum: kendi kendini takip edemez';
+    end if;
+    if exists (
+      select 1 from public.follows f
+      where f.follower_id = req.requester_id and f.following_id = req.target_id
+    ) then
+      -- zaten takip ediyor - hata degil, sessizce no-op (idempotent kabul)
+      return;
+    end if;
+    if exists (
+      select 1 from public.blocks b
+      where (b.blocker_id = req.target_id and b.blocked_id = req.requester_id)
+         or (b.blocker_id = req.requester_id and b.blocked_id = req.target_id)
+    ) then
+      raise exception 'engelli kullanicilar arasinda takip iliskisi kurulamaz';
+    end if;
+
+    insert into public.follows (follower_id, following_id)
     values (req.requester_id, req.target_id)
     on conflict do nothing;
   end if;
 end;
 $$;
 
-revoke all on function respond_to_follow_request(uuid, text) from public;
+revoke all on function respond_to_follow_request(uuid, text) from public, anon;
 grant execute on function respond_to_follow_request(uuid, text) to authenticated;
 
 

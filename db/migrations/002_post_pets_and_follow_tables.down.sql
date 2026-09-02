@@ -1,16 +1,38 @@
 -- =====================================================================
+-- *** DESTRUCTIVE / MANUEL-ONLY - OTOMATIK CI/CD'DE CALISTIRMA. ***
 -- Asama 2 migration'inin geri alma (rollback) betigi.
 -- *** SADECE STAGING SUPABASE PROJESINDE CALISTIR. ***
 --
--- posts.pet_id kolonu up.sql'de silinmedigi icin bu rollback veri
--- kaybi olusturmaz - post_pets/pet_follows/follow_requests'e sadece
--- migration sonrasi eklenen yeni veri (varsa) kaybolur.
+-- posts.pet_id kolonu up.sql'de silinmedigi icin TEK PET'li postlar
+-- icin veri kaybi olusmaz. AMA: bir posta BIRDEN FAZLA pet eklenmisse
+-- (post_pets'te ayni post_id'ye birden fazla satir), bu rollback
+-- post_pets tablosunu TAMAMEN SILDIGI icin o fazladan pet baglantilarini
+-- geri getirilemez sekilde kaybeder - posts.pet_id zaten tekil bir
+-- kolon oldugundan cok-pet verisini geri tasiyacak bir yer yok. Ayni
+-- sekilde pet_follows/follow_requests'teki tum veri de kalici olarak
+-- silinir. Bu yuzden asagida once bir guvenlik kontrolu var; cok-pet
+-- verisi varsa migration REDDEDER, elle inceleme ve Recep onayi gerekir.
 --
--- Idempotent: IF EXISTS deseniyle yazildi, tekrar calistirilirsa hata
--- vermez.
+-- Idempotent (IF EXISTS deseniyle) ama DESTRUCTIVE - sadece bilinçli,
+-- tek seferlik bir rollback karari sonrasi elle calistirilmali.
 -- =====================================================================
 
 begin;
+
+do $$
+declare
+  multi_pet_posts integer;
+begin
+  select count(*) into multi_pet_posts
+    from (select post_id from post_pets group by post_id having count(*) > 1) x;
+  if multi_pet_posts > 0 then
+    raise exception
+      'ROLLBACK DURDURULDU: % post''ta birden fazla pet var (post_pets). '
+      'posts.pet_id tekil oldugu icin bu veri geri tasinamaz, silinmesi '
+      'kalici veri kaybi olur. Elle inceleme ve Recep onayi olmadan devam etme.',
+      multi_pet_posts;
+  end if;
+end $$;
 
 -- DROP FUNCTION, fonksiyonu ve uzerindeki tum GRANT/REVOKE izinlerini
 -- birlikte kaldirir; ayrica REVOKE'un IF EXISTS destegi yok.
