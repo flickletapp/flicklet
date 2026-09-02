@@ -3,7 +3,7 @@ import { Camera, Trophy } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
 import { TopBar, PrimaryButton, ErrorBanner } from "../../components/ui";
 import { CATEGORIES } from "../../mockData";
-import { supabaseUploadImage, supabaseInsert } from "../../lib/supabase/client";
+import { supabaseUploadImage, supabaseInsert, supabaseDelete } from "../../lib/supabase/client";
 
 export function CreatePostScreen({ myPets, session, userId, onPublish, onCancel }) {
   const [selectedPetId, setSelectedPetId] = useState(myPets[0]?.id || "");
@@ -69,7 +69,30 @@ export function CreatePostScreen({ myPets, session, userId, onPublish, onCancel 
         image_url: imageUrl,
         contest_category: contestOn ? category : null,
       });
-      onPublish(inserted[0]);
+      const newPost = inserted[0];
+
+      // Asama 2 gecici dual-write: posts.pet_id hala tek dogru kaynak,
+      // ayrica post_pets'e de yaziliyor (cok-pet göcü icin altyapi).
+      // Bu adim basarisiz olursa yarim (pet baglantisiz) bir post feed'de
+      // sessizce kalmasin diye post geri siliniyor ve kullaniciya acik
+      // hata gosteriliyor - tekrar denemesi gerekiyor.
+      if (selectedPet?.id) {
+        try {
+          await supabaseInsert("post_pets", session.access_token, {
+            post_id: newPost.id,
+            pet_id: selectedPet.id,
+          });
+        } catch (ppError) {
+          try {
+            await supabaseDelete("posts", session.access_token, `id=eq.${newPost.id}`);
+          } catch (deleteError) {
+            throw new Error("Gönderi oluşturuldu fakat geri alınamadı, lütfen bize bildir: " + deleteError.message);
+          }
+          throw new Error("Gönderi pet bağlantısıyla kaydedilemedi, tekrar dene: " + ppError.message);
+        }
+      }
+
+      onPublish(newPost);
     } catch (e) {
       setError(e.message);
     } finally {
