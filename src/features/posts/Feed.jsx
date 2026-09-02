@@ -14,7 +14,7 @@ async function loadFeed(session, userId) {
   const rows = await supabaseSelect(
     "posts",
     session?.access_token,
-    "select=id,author_id,pet_id,caption,image_url,contest_category,created_at,profiles!posts_author_id_fkey(display_name,is_private),pets(name,emoji)&order=created_at.desc"
+    "select=id,author_id,pet_id,caption,image_url,contest_category,created_at,profiles!posts_author_id_fkey(display_name,is_private),pets(id,name,emoji),post_pets(pets(id,name,emoji))&order=created_at.desc"
   );
   const postIds = rows.map((r) => r.id);
   let likeRows = [];
@@ -39,13 +39,24 @@ async function loadFeed(session, userId) {
   }
   return rows
     .filter((r) => !blockedIds.has(r.author_id))
-    .map((r) => ({
+    .map((r) => {
+    // Asama 2 gecisi: pet baglantisi hem eski posts.pet_id/pets (fallback)
+    // hem yeni post_pets uzerinden okunuyor, ayni pet iki kaynaktan da
+    // gelirse id'ye gore tekillestiriliyor.
+    const linkedPets = (r.post_pets || []).map((pp) => pp.pets).filter(Boolean);
+    const petMap = new Map();
+    [r.pets, ...linkedPets].forEach((p) => {
+      if (p && p.id) petMap.set(p.id, p);
+    });
+    const pets = Array.from(petMap.values());
+    return {
     id: r.id,
     authorId: r.author_id,
     isMine: r.author_id === userId,
     human: r.profiles?.display_name || "Kullanıcı",
-    pet: r.pets?.name || "Dost",
-    petEmoji: r.pets?.emoji || "🐾",
+    pets,
+    pet: pets.map((p) => p.name).join(" & ") || "Dost",
+    petEmoji: pets[0]?.emoji || "🐾",
     imageUrl: r.image_url,
     caption: r.caption,
     contest: r.contest_category,
@@ -55,7 +66,8 @@ async function loadFeed(session, userId) {
     isFollowing: followingIds.has(r.author_id),
     hasVotedToday,
     tag: null,
-  }));
+    };
+  });
 }
 
 async function updateStreakAfterVote(session, userId) {
@@ -84,6 +96,10 @@ async function updateStreakAfterVote(session, userId) {
 }
 
 export function PostCard({ post, session, userId, myName, onOpenComplaint, onOpenComments, onOpenProfile, isGuest, onRequireAuth, onStreakUpdate }) {
+  const petsLabel =
+    post.pets && post.pets.length > 0
+      ? post.pets.map((p) => `${p.emoji || "🐾"} ${p.name}`).join(" & ")
+      : `🐾 Dost`;
   const [liked, setLiked] = useState(post.likedByMe);
   const [likeCount, setLikeCount] = useState(post.likeCount);
   const [commentCount, setCommentCount] = useState(post.commentCount);
@@ -168,7 +184,7 @@ export function PostCard({ post, session, userId, myName, onOpenComplaint, onOpe
         >
           <BlobAvatar emoji={post.petEmoji} color={C.mustard} />
           <div>
-            <div style={{ fontFamily: FONT_DISPLAY, fontSize: 14, color: C.ink }}>{post.pet}</div>
+            <div style={{ fontFamily: FONT_DISPLAY, fontSize: 14, color: C.ink }}>{petsLabel}</div>
             <div style={{ fontFamily: FONT_BODY, fontSize: 12, color: C.inkSoft }}>{post.human}</div>
           </div>
         </div>
@@ -272,7 +288,7 @@ export function PostCard({ post, session, userId, myName, onOpenComplaint, onOpe
         )}
         {post.imageUrl ? (
           <div style={{ fontFamily: FONT_BODY, fontSize: 13.5, color: C.ink, lineHeight: 1.4 }}>
-            <span style={{ fontWeight: 800 }}>{post.pet}</span> — {post.caption}
+            <span style={{ fontWeight: 800 }}>{petsLabel}</span> — {post.caption}
           </div>
         ) : (
           <div style={{ fontFamily: FONT_BODY, fontSize: 16, color: C.ink, lineHeight: 1.5 }}>{post.caption}</div>
