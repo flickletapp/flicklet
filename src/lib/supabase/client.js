@@ -134,6 +134,23 @@ export async function supabaseDelete(table, accessToken, match) {
   }
 }
 
+export async function supabaseRpc(fn, accessToken, params = {}) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message || "İşlem başarısız oldu");
+  }
+  return res.status === 204 ? null : res.json().catch(() => null);
+}
+
 export async function supabaseUploadImage(path, file, accessToken) {
   const res = await fetch(`${SUPABASE_URL}/storage/v1/object/post-images/${path}`, {
     method: "POST",

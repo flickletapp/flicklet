@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Lock, Globe, Plus, Camera, LogOut } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
-import { TopBar, BlobAvatar, EmptyState } from "../../components/ui";
+import { TopBar, BlobAvatar, EmptyState, ErrorBanner } from "../../components/ui";
 import { FollowListModal } from "../../components/modals";
 import { MOCK_FOLLOWERS } from "../../mockData";
-import { supabaseUpdate, supabaseCount, supabaseSelect, supabaseUploadImage } from "../../lib/supabase/client";
+import { supabaseUpdate, supabaseCount, supabaseSelect, supabaseUploadImage, supabaseRpc } from "../../lib/supabase/client";
 
 export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsPrivate, onOpenProfile, onLogout }) {
   const [listOpen, setListOpen] = useState(null);
@@ -13,7 +13,15 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
   const [myPosts, setMyPosts] = useState([]);
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [pendingRequests, setPendingRequests] = useState([]);
+  const [requestError, setRequestError] = useState("");
   const avatarInputRef = useRef(null);
+
+  const refreshFollowerCount = () => {
+    supabaseCount("follows", session?.access_token, `select=follower_id&following_id=eq.${userId}`)
+      .then((followers) => setCounts((c) => ({ ...c, followers })))
+      .catch(() => {});
+  };
 
   useEffect(() => {
     if (!userId) return;
@@ -33,7 +41,27 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
         if (rows[0]?.dm_policy) setDmPolicy(rows[0].dm_policy);
       })
       .catch(() => {});
+    // Sadece insan takip istekleri (pet_id=null) - pet takip istekleri
+    // Asama 7'nin isi, simdilik gosterilmiyor.
+    supabaseSelect(
+      "follow_requests",
+      session?.access_token,
+      `select=id,profiles!follow_requests_requester_id_fkey(display_name,handle,avatar_url)&target_id=eq.${userId}&pet_id=is.null&status=eq.pending&order=created_at.desc`
+    )
+      .then(setPendingRequests)
+      .catch(() => {});
   }, [userId]);
+
+  const respondToRequest = async (requestId, newStatus) => {
+    setRequestError("");
+    try {
+      await supabaseRpc("respond_to_follow_request", session.access_token, { request_id: requestId, new_status: newStatus });
+      setPendingRequests((cur) => cur.filter((r) => r.id !== requestId));
+      if (newStatus === "accepted") refreshFollowerCount();
+    } catch (e) {
+      setRequestError(e.message);
+    }
+  };
 
   const changeDmPolicy = async (policy) => {
     setDmPolicy(policy);
@@ -109,6 +137,41 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
             </div>
           </div>
         </div>
+
+        {pendingRequests.length > 0 && (
+          <div style={{ marginBottom: 22 }}>
+            <div style={{ fontFamily: FONT_DISPLAY, fontSize: 14, color: C.ink, marginBottom: 10 }}>Takip İstekleri</div>
+            {requestError && <ErrorBanner style={{ marginBottom: 8 }}>{requestError}</ErrorBanner>}
+            {pendingRequests.map((r) => (
+              <div
+                key={r.id}
+                style={{ display: "flex", alignItems: "center", gap: 10, background: C.cream, border: `1px solid ${C.line}`, borderRadius: 14, padding: "10px 12px", marginBottom: 8 }}
+              >
+                {r.profiles?.avatar_url ? (
+                  <img src={r.profiles.avatar_url} alt="" style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} />
+                ) : (
+                  <BlobAvatar emoji="🙂" size={40} color={C.pine} />
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: FONT_DISPLAY, fontSize: 13.5, color: C.ink }}>{r.profiles?.display_name || "Kullanıcı"}</div>
+                  {r.profiles?.handle && <div style={{ fontFamily: FONT_BODY, fontSize: 11.5, color: C.inkSoft }}>{r.profiles.handle}</div>}
+                </div>
+                <button
+                  onClick={() => respondToRequest(r.id, "accepted")}
+                  style={{ background: C.pine, color: C.cream, border: "none", borderRadius: 10, padding: "7px 12px", fontFamily: FONT_DISPLAY, fontSize: 12, cursor: "pointer" }}
+                >
+                  Kabul et
+                </button>
+                <button
+                  onClick={() => respondToRequest(r.id, "rejected")}
+                  style={{ background: "none", color: C.inkSoft, border: `1.5px solid ${C.line}`, borderRadius: 10, padding: "7px 12px", fontFamily: FONT_DISPLAY, fontSize: 12, cursor: "pointer" }}
+                >
+                  Reddet
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div style={{ fontFamily: FONT_DISPLAY, fontSize: 14, color: C.ink, marginBottom: 10 }}>Dostlarım</div>
         <div style={{ display: "flex", gap: 10, marginBottom: 22, flexWrap: "wrap" }}>
