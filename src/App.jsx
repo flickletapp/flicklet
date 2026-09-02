@@ -1,8 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { C, FONT_BODY } from "./theme";
-import { supabaseGetUser, supabaseSelect } from "./lib/supabase/client";
-
-const SESSION_KEY = "flicklet_session";
+import { useAuth } from "./features/auth/useAuth";
 import { AuthScreen } from "./features/auth/Auth";
 import { ProfileSetupScreen } from "./features/auth/ProfileSetup";
 import { FeedScreen } from "./features/posts/Feed";
@@ -18,17 +16,11 @@ import { NavBar } from "./components/ui";
 import { ComplaintModal, SignupPromptModal } from "./components/modals";
 
 export default function FlickletApp() {
-  const [phase, setPhase] = useState("loading"); // loading -> auth -> setup -> app
+  const auth = useAuth();
   const [tab, setTab] = useState("feed");
-  const [user, setUser] = useState({ name: "" });
-  const [isPrivate, setIsPrivate] = useState(false);
   const [complaintPostId, setComplaintPostId] = useState(null);
-  const [myPets, setMyPets] = useState([]);
-  const [isGuest, setIsGuest] = useState(false);
   const [promptOpen, setPromptOpen] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [session, setSession] = useState(null);
-  const [userId, setUserId] = useState(null);
   const [viewingProfile, setViewingProfile] = useState(null);
   const [searching, setSearching] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
@@ -37,66 +29,12 @@ export default function FlickletApp() {
 
   const requireAuth = () => setPromptOpen(true);
 
-  const bootstrapSession = async (sessionData) => {
-    setSession(sessionData);
-    try {
-      const u = await supabaseGetUser(sessionData.access_token);
-      setUserId(u.id);
-      // Onboarding tamamlanma durumu profiles.display_name doluluğuna bağlı,
-      // pet sayısına değil — pet eklemek zorunlu değil (bkz. flicklet_stage0_audit P0).
-      const [profileRows, existingPets] = await Promise.all([
-        supabaseSelect("profiles", sessionData.access_token, `select=display_name,is_private&id=eq.${u.id}`),
-        supabaseSelect("pets", sessionData.access_token, `select=id,name,species,emoji&owner_id=eq.${u.id}`),
-      ]);
-      const displayName = profileRows[0]?.display_name;
-      if (displayName) {
-        setUser({ name: displayName });
-        setIsPrivate(!!profileRows[0]?.is_private);
-        setMyPets(existingPets);
-        setPhase("app");
-        return;
-      }
-      setPhase("setup");
-    } catch (e) {
-      localStorage.removeItem(SESSION_KEY);
-      setSession(null);
-      setPhase("auth");
-    }
-  };
-
-  useEffect(() => {
-    const saved = localStorage.getItem(SESSION_KEY);
-    if (!saved) {
-      setPhase("auth");
-      return;
-    }
-    try {
-      bootstrapSession(JSON.parse(saved));
-    } catch (e) {
-      localStorage.removeItem(SESSION_KEY);
-      setPhase("auth");
-    }
-  }, []);
-
-  const handleAuthDone = async (sessionData) => {
-    if (sessionData?.access_token) {
-      localStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
-      await bootstrapSession(sessionData);
-      return;
-    }
-    setPhase("setup");
-  };
-
   const handleLogout = () => {
-    localStorage.removeItem(SESSION_KEY);
-    setSession(null);
-    setUserId(null);
-    setUser({ name: "" });
-    setMyPets([]);
-    setIsGuest(false);
+    auth.handleLogout();
     setTab("feed");
-    setPhase("auth");
   };
+
+  const { phase, session, userId, user, isPrivate, myPets, isGuest } = auth;
 
   return (
     <div style={{ minHeight: "100vh", background: C.paper, color: C.ink, fontFamily: FONT_BODY }}>
@@ -112,27 +50,8 @@ export default function FlickletApp() {
           <img src="/favicon.png" alt="" style={{ width: 48, height: 48, opacity: 0.6 }} />
         </div>
       )}
-      {phase === "auth" && (
-        <AuthScreen
-          onDone={handleAuthDone}
-          onGuest={() => {
-            setIsGuest(true);
-            setPhase("app");
-          }}
-        />
-      )}
-      {phase === "setup" && (
-        <ProfileSetupScreen
-          session={session}
-          userId={userId}
-          onDone={(profileData) => {
-            setIsGuest(false);
-            if (profileData?.name) setUser({ name: profileData.name });
-            if (profileData?.pets) setMyPets(profileData.pets);
-            setPhase("app");
-          }}
-        />
-      )}
+      {phase === "auth" && <AuthScreen onDone={auth.handleAuthDone} onGuest={auth.enterGuestMode} />}
+      {phase === "setup" && <ProfileSetupScreen session={session} userId={userId} onDone={auth.completeOnboarding} />}
       {phase === "app" && !creating && !viewingProfile && !searching && !inboxOpen && !activeChat && (
         <>
           {tab === "feed" && (
@@ -173,7 +92,7 @@ export default function FlickletApp() {
               user={user}
               myPets={myPets}
               isPrivate={isPrivate}
-              setIsPrivate={setIsPrivate}
+              setIsPrivate={auth.setIsPrivate}
               onOpenProfile={(p) => setViewingProfile(p)}
               onLogout={handleLogout}
             />
@@ -231,8 +150,7 @@ export default function FlickletApp() {
           onClose={() => setPromptOpen(false)}
           onSignup={() => {
             setPromptOpen(false);
-            setIsGuest(false);
-            setPhase("auth");
+            auth.goToSignup();
           }}
         />
       )}
