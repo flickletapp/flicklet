@@ -15,7 +15,7 @@ async function loadFeed(session, userId) {
   const rows = await supabaseSelect(
     "posts",
     session?.access_token,
-    "select=id,author_id,pet_id,caption,image_url,contest_category,created_at,profiles!posts_author_id_fkey(display_name,is_private),pets(id,name,emoji),post_pets(pets(id,name,emoji))&order=created_at.desc"
+    "select=id,author_id,pet_id,caption,image_url,contest_category,created_at,profiles!posts_author_id_fkey(display_name,is_private),pets!posts_pet_id_fkey(id,name,emoji),post_pets(pets!post_pets_pet_id_fkey(id,name,emoji))&order=created_at.desc"
   );
   const postIds = rows.map((r) => r.id);
   let likeRows = [];

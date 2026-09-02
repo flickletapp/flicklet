@@ -26,7 +26,7 @@ async function loadLeaderboard(session, category) {
   const rows = await supabaseSelect(
     "posts",
     session?.access_token,
-    `select=id,profiles!posts_author_id_fkey(display_name),pets(name,emoji)&contest_category=eq.${encodeURIComponent(category)}`
+    `select=id,profiles!posts_author_id_fkey(display_name),pets!posts_pet_id_fkey(name,emoji)&contest_category=eq.${encodeURIComponent(category)}`
   );
   const postIds = rows.map((r) => r.id);
   let voteRows = [];
