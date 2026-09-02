@@ -5,7 +5,7 @@ import { supabaseSelect, supabaseInsert, supabaseDelete } from "../../lib/supaba
 // paylasilan ortak mantik): acik profilde dogrudan follows, kapali profilde
 // follow_requests (pet_id=null) ile pending istek. Pet takibi/istek kabul
 // akisina dokunmaz - o Asama 7'nin isi.
-export function useHumanFollow({ session, userId, targetId, isGuest, onRequireAuth }) {
+export function useHumanFollow({ session, userId, targetId, isGuest, onRequireAuth, onFollowChange }) {
   const [followState, setFollowState] = useState("none"); // "none" | "pending" | "following"
   const [targetIsPrivate, setTargetIsPrivate] = useState(null); // null = henuz yuklenmedi
   const isSelf = !!userId && userId === targetId;
@@ -43,6 +43,9 @@ export function useHumanFollow({ session, userId, targetId, isGuest, onRequireAu
       setFollowState("none");
       try {
         await supabaseDelete("follows", session.access_token, `follower_id=eq.${userId}&following_id=eq.${targetId}`);
+        // Sadece gercek follows kaydi silindiginde (dogrudan takipten
+        // cikma) sayaci azalt - pending istek iptalinde bu koldan gecilmez.
+        onFollowChange && onFollowChange(-1);
       } catch (e) {
         setFollowState("following");
       }
@@ -74,6 +77,10 @@ export function useHumanFollow({ session, userId, targetId, isGuest, onRequireAu
       setFollowState("following");
       try {
         await supabaseInsert("follows", session.access_token, { follower_id: userId, following_id: targetId });
+        // Sadece dogrudan follows insert'i basarili oldugunda (acik
+        // profil) sayaci artir - kapali profilde bu kola hic girilmiyor,
+        // sadece pending istek olusuyor, sayac degismiyor.
+        onFollowChange && onFollowChange(1);
       } catch (e) {
         setFollowState("none");
       }

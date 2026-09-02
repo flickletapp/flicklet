@@ -47,16 +47,20 @@ function PetFollowRow({ pet, session, userId, ownerId, isGuest, onRequireAuth })
 }
 
 export function UserProfileView({ target, session, userId, onBack, onOpenProfile, onOpenChat, isGuest, onRequireAuth }) {
+  const [listOpen, setListOpen] = useState(null);
+  const [counts, setCounts] = useState({ followers: 0, following: 0 });
+  const [pets, setPets] = useState([]);
   const { followState, followLabel, isSelf, disabled, toggleFollow } = useHumanFollow({
     session,
     userId,
     targetId: target.authorId,
     isGuest,
     onRequireAuth,
+    // Sadece dogrudan follows insert/delete basarili oldugunda tetiklenir
+    // (pending istek olusturma/iptalinde degil) - negatif sayi olusmasin
+    // diye alt sinir 0.
+    onFollowChange: (delta) => setCounts((c) => ({ ...c, followers: Math.max(0, c.followers + delta) })),
   });
-  const [listOpen, setListOpen] = useState(null);
-  const [counts, setCounts] = useState({ followers: 0, following: 0 });
-  const [pets, setPets] = useState([]);
 
   useEffect(() => {
     if (!target.authorId) return;
