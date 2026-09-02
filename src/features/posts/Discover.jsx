@@ -39,7 +39,7 @@ export function DiscoverScreen({ session, userId, myName, onOpenProfile, onOpenC
     let active = true;
     setSearchingProfiles(true);
     const timer = setTimeout(() => {
-      searchUsers(session, profileQuery)
+      searchUsers(session, profileQuery, userId)
         .then((rows) => active && setProfileResults(rows))
         .catch(() => active && setProfileResults([]))
         .finally(() => active && setSearchingProfiles(false));
@@ -48,7 +48,7 @@ export function DiscoverScreen({ session, userId, myName, onOpenProfile, onOpenC
       active = false;
       clearTimeout(timer);
     };
-  }, [profileQuery]);
+  }, [profileQuery, userId]);
 
   const scored = posts.filter((p) => p.imageUrl).sort((a, b) => b.likeCount - a.likeCount);
   const shown =

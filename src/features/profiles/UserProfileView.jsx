@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { Mail } from "lucide-react";
+import { Mail, X } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
-import { TopBar, BlobAvatar } from "../../components/ui";
+import { TopBar, BlobAvatar, ErrorBanner } from "../../components/ui";
 import { FollowListModal } from "../../components/modals";
 import { MOCK_FOLLOWERS } from "../../mockData";
-import { supabaseCount, supabaseSelect } from "../../lib/supabase/client";
+import { supabaseCount, supabaseSelect, supabaseInsert, supabaseDelete, supabaseRpc } from "../../lib/supabase/client";
 import { useHumanFollow } from "./useHumanFollow";
 import { usePetFollow } from "./usePetFollow";
 
@@ -50,6 +50,11 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
   const [listOpen, setListOpen] = useState(null);
   const [counts, setCounts] = useState({ followers: 0, following: 0 });
   const [pets, setPets] = useState([]);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmBlockOpen, setConfirmBlockOpen] = useState(false);
+  const [blockWorking, setBlockWorking] = useState(false);
+  const [blockError, setBlockError] = useState("");
   const { followState, followLabel, isSelf, disabled, toggleFollow } = useHumanFollow({
     session,
     userId,
@@ -73,12 +78,143 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
     supabaseSelect("pets", session?.access_token, `select=id,name,emoji&owner_id=eq.${target.authorId}`)
       .then(setPets)
       .catch(() => {});
-  }, [target.authorId]);
+    if (userId && userId !== target.authorId) {
+      supabaseSelect("blocks", session?.access_token, `select=blocked_id&blocker_id=eq.${userId}&blocked_id=eq.${target.authorId}`)
+        .then((rows) => setIsBlocked(rows.length > 0))
+        .catch(() => {});
+    }
+  }, [target.authorId, userId]);
+
+  const confirmBlock = async () => {
+    setConfirmBlockOpen(false);
+    setBlockError("");
+    setBlockWorking(true);
+    try {
+      await supabaseInsert("blocks", session.access_token, { blocker_id: userId, blocked_id: target.authorId });
+
+      // Mevcut RLS'e uygun temizlik: sadece BENIM (blocker) sahip
+      // oldugum satirlari silebilirim/reddedebilirim - karsi tarafin
+      // bana ait takip/istek satirlarini RLS baskasinin silmesine izin
+      // vermiyor (follows_delete: follower_id=auth.uid(),
+      // follow_requests_delete: requester_id=auth.uid()). O yuzden
+      // "beni takip ediyor" veya "bana istek gonderdi" durumlari icin
+      // sadece target_id=auth.uid() olan bekleyen istekleri RPC ile
+      // reddedebiliyorum - dogrudan follows/pet_follows satirini
+      // silemiyorum, bu bilinen bir sinir.
+      const petIds = pets.map((p) => p.id);
+      await Promise.all([
+        supabaseDelete("follows", session.access_token, `follower_id=eq.${userId}&following_id=eq.${target.authorId}`).catch(() => {}),
+        supabaseDelete(
+          "follow_requests",
+          session.access_token,
+          `requester_id=eq.${userId}&target_id=eq.${target.authorId}&pet_id=is.null&status=eq.pending`
+        ).catch(() => {}),
+        petIds.length > 0
+          ? supabaseDelete("pet_follows", session.access_token, `follower_id=eq.${userId}&pet_id=in.(${petIds.join(",")})`).catch(() => {})
+          : Promise.resolve(),
+        petIds.length > 0
+          ? supabaseDelete(
+              "follow_requests",
+              session.access_token,
+              `requester_id=eq.${userId}&pet_id=in.(${petIds.join(",")})&status=eq.pending`
+            ).catch(() => {})
+          : Promise.resolve(),
+      ]);
+
+      const incoming = await supabaseSelect(
+        "follow_requests",
+        session.access_token,
+        `select=id&requester_id=eq.${target.authorId}&target_id=eq.${userId}&status=eq.pending`
+      ).catch(() => []);
+      await Promise.all(
+        incoming.map((r) =>
+          supabaseRpc("respond_to_follow_request", session.access_token, { request_id: r.id, new_status: "rejected" }).catch(() => {})
+        )
+      );
+
+      setIsBlocked(true);
+    } catch (e) {
+      setBlockError(e.message);
+    } finally {
+      setBlockWorking(false);
+    }
+  };
+
+  const unblock = async () => {
+    setBlockError("");
+    setBlockWorking(true);
+    try {
+      await supabaseDelete("blocks", session.access_token, `blocker_id=eq.${userId}&blocked_id=eq.${target.authorId}`);
+      setIsBlocked(false);
+    } catch (e) {
+      setBlockError(e.message);
+    } finally {
+      setBlockWorking(false);
+    }
+  };
+
+  if (isBlocked) {
+    return (
+      <div>
+        <TopBar title={target.human} onBack={onBack} />
+        <div style={{ padding: "40px 24px", textAlign: "center", maxWidth: 480, margin: "0 auto" }}>
+          <div style={{ fontFamily: FONT_BODY, fontSize: 13.5, color: C.inkSoft, marginBottom: 18, lineHeight: 1.5 }}>
+            {target.human} adlı kullanıcıyı engelledin. Birbirinizi takip edemez, istek gönderemezsiniz.
+          </div>
+          {blockError && <ErrorBanner style={{ marginBottom: 12 }}>{blockError}</ErrorBanner>}
+          <button
+            onClick={unblock}
+            disabled={blockWorking}
+            style={{
+              background: "none",
+              color: C.coral,
+              border: `1.5px solid ${C.coral}`,
+              borderRadius: 10,
+              padding: "10px 18px",
+              fontFamily: FONT_DISPLAY,
+              fontSize: 13,
+              cursor: blockWorking ? "default" : "pointer",
+              opacity: blockWorking ? 0.6 : 1,
+            }}
+          >
+            {blockWorking ? "..." : "Engeli kaldır"}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
-      <TopBar title={target.human} onBack={onBack} />
+      <TopBar
+        title={target.human}
+        onBack={onBack}
+        right={
+          !isSelf && (
+            <div style={{ position: "relative" }}>
+              <button onClick={() => setMenuOpen((v) => !v)} style={{ background: "none", border: "none", cursor: "pointer", color: C.inkSoft, fontSize: 18, padding: "0 4px" }}>
+                ⋯
+              </button>
+              {menuOpen && (
+                <div style={{ position: "absolute", right: 0, top: 26, background: C.cream, border: `1px solid ${C.line}`, borderRadius: 10, boxShadow: "0 6px 18px rgba(0,0,0,0.08)", zIndex: 10, minWidth: 150 }}>
+                  <button
+                    onClick={() => {
+                      if (isGuest) return onRequireAuth();
+                      setMenuOpen(false);
+                      setConfirmBlockOpen(true);
+                    }}
+                    style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "10px 12px", background: "none", border: "none", cursor: "pointer", fontFamily: FONT_BODY, fontSize: 13, color: C.coral, textAlign: "left", whiteSpace: "nowrap" }}
+                  >
+                    <X size={14} /> Engelle
+                  </button>
+                </div>
+              )}
+            </div>
+          )
+        }
+      />
       <div style={{ padding: "20px 18px 40px", maxWidth: 480, margin: "0 auto" }}>
+        {blockError && <ErrorBanner style={{ marginBottom: 14 }}>{blockError}</ErrorBanner>}
         <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
           <BlobAvatar emoji={target.petEmoji} size={64} color={C.mustard} />
           <div style={{ flex: 1 }}>
@@ -157,6 +293,35 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
             onOpenProfile(u);
           }}
         />
+      )}
+
+      {confirmBlockOpen && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(36,33,29,0.45)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 50 }}
+          onClick={() => setConfirmBlockOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: C.paper, borderRadius: "22px 22px 0 0", padding: "20px 20px 28px", width: "100%", maxWidth: 480 }}
+          >
+            <div style={{ fontFamily: FONT_DISPLAY, fontSize: 17, color: C.ink, marginBottom: 8 }}>{target.human} engellensin mi?</div>
+            <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, marginBottom: 20, lineHeight: 1.5 }}>
+              Birbirinizi bir daha takip edemez, takip isteği gönderemezsiniz. Mevcut takip/istek bağlantılarınız (izin verdiğimiz ölçüde) temizlenir.
+            </div>
+            <button
+              onClick={confirmBlock}
+              style={{ width: "100%", marginBottom: 8, background: C.coral, color: C.cream, border: "none", borderRadius: 12, padding: "12px 14px", fontFamily: FONT_DISPLAY, fontSize: 13.5, cursor: "pointer" }}
+            >
+              Engelle
+            </button>
+            <button
+              onClick={() => setConfirmBlockOpen(false)}
+              style={{ width: "100%", background: "none", color: C.inkSoft, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: "12px 14px", fontFamily: FONT_DISPLAY, fontSize: 13.5, cursor: "pointer" }}
+            >
+              Vazgeç
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

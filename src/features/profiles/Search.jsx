@@ -3,15 +3,23 @@ import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
 import { TopBar, BlobAvatar, EmptyState } from "../../components/ui";
 import { supabaseSelect } from "../../lib/supabase/client";
 
-export async function searchUsers(session, query) {
+export async function searchUsers(session, query, viewerUserId) {
   const term = query.trim().replace(/^@/, "");
   if (!term) return [];
   const encoded = encodeURIComponent(term);
-  const rows = await supabaseSelect(
+  let rows = await supabaseSelect(
     "profiles",
     session?.access_token,
     `select=id,handle,display_name&or=(handle.ilike.*${encoded}*,display_name.ilike.*${encoded}*)&limit=20`
   );
+  if (rows.length === 0) return [];
+  // Engellenen kullanicilar aramada gorunmesin (Feed'deki blok filtresiyle
+  // ayni mantik - sadece kendi engel listemi goruyorum, RLS geregi).
+  if (viewerUserId) {
+    const blockRows = await supabaseSelect("blocks", session?.access_token, `select=blocked_id&blocker_id=eq.${viewerUserId}`).catch(() => []);
+    const blockedIds = new Set(blockRows.map((b) => b.blocked_id));
+    rows = rows.filter((r) => !blockedIds.has(r.id));
+  }
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
   const pets = await supabaseSelect("pets", session?.access_token, `select=owner_id,name,emoji&owner_id=in.(${ids.join(",")})`);
@@ -27,7 +35,7 @@ export async function searchUsers(session, query) {
   });
 }
 
-export function SearchScreen({ session, onBack, onOpenProfile }) {
+export function SearchScreen({ session, userId, onBack, onOpenProfile }) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -40,7 +48,7 @@ export function SearchScreen({ session, onBack, onOpenProfile }) {
     let active = true;
     setLoading(true);
     const timer = setTimeout(() => {
-      searchUsers(session, q)
+      searchUsers(session, q, userId)
         .then((rows) => active && setResults(rows))
         .catch(() => active && setResults([]))
         .finally(() => active && setLoading(false));
@@ -49,7 +57,7 @@ export function SearchScreen({ session, onBack, onOpenProfile }) {
       active = false;
       clearTimeout(timer);
     };
-  }, [q]);
+  }, [q, userId]);
 
   return (
     <div>
