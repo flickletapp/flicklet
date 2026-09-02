@@ -5,6 +5,7 @@ import { TopBar, BlobAvatar, PawBadge, LoadingState, EmptyState, ErrorBanner } f
 import { CommentsModal } from "../../components/modals";
 import { TRENDING } from "../../mockData";
 import { supabaseSelect, supabaseInsert, supabaseUpsert, supabaseDelete, supabaseCount } from "../../lib/supabase/client";
+import { useHumanFollow } from "../profiles/useHumanFollow";
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -107,9 +108,15 @@ export function PostCard({ post, session, userId, myName, onOpenComplaint, onOpe
   const [voteError, setVoteError] = useState("");
   const [voting, setVoting] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [following, setFollowing] = useState(post.isFollowing);
   const [blocked, setBlocked] = useState(false);
   const [showComments, setShowComments] = useState(false);
+  const { followState, followLabel, disabled: followDisabled, toggleFollow } = useHumanFollow({
+    session,
+    userId,
+    targetId: post.authorId,
+    isGuest,
+    onRequireAuth,
+  });
 
   const castVote = async () => {
     if (isGuest) return onRequireAuth();
@@ -140,18 +147,6 @@ export function PostCard({ post, session, userId, myName, onOpenComplaint, onOpe
     } catch (e) {
       setLiked(!next);
       setLikeCount((c) => (next ? c - 1 : c + 1));
-    }
-  };
-
-  const toggleFollow = async () => {
-    if (isGuest) return onRequireAuth();
-    const next = !following;
-    setFollowing(next);
-    try {
-      if (next) await supabaseInsert("follows", session.access_token, { follower_id: userId, following_id: post.authorId });
-      else await supabaseDelete("follows", session.access_token, `follower_id=eq.${userId}&following_id=eq.${post.authorId}`);
-    } catch (e) {
-      setFollowing(!next);
     }
   };
 
@@ -192,19 +187,21 @@ export function PostCard({ post, session, userId, myName, onOpenComplaint, onOpe
         {!post.isMine && (
           <button
             onClick={toggleFollow}
+            disabled={followDisabled}
             style={{
-              background: following ? C.cream : C.pine,
-              color: following ? C.pine : C.cream,
+              background: followState === "none" ? C.pine : C.cream,
+              color: followState === "none" ? C.cream : C.pine,
               border: `1.5px solid ${C.pine}`,
               borderRadius: 10,
               padding: "5px 10px",
               fontFamily: FONT_DISPLAY,
               fontSize: 11.5,
-              cursor: "pointer",
+              cursor: followDisabled ? "default" : "pointer",
               whiteSpace: "nowrap",
+              opacity: followDisabled ? 0.6 : 1,
             }}
           >
-            {following ? "Takipte" : "Takip Et"}
+            {followLabel}
           </button>
         )}
         <div style={{ position: "relative" }}>

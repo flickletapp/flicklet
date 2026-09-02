@@ -4,16 +4,19 @@ import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
 import { TopBar, BlobAvatar } from "../../components/ui";
 import { FollowListModal } from "../../components/modals";
 import { MOCK_FOLLOWERS } from "../../mockData";
-import { supabaseSelect, supabaseInsert, supabaseDelete, supabaseCount } from "../../lib/supabase/client";
+import { supabaseCount } from "../../lib/supabase/client";
+import { useHumanFollow } from "./useHumanFollow";
 
 export function UserProfileView({ target, session, userId, onBack, onOpenProfile, onOpenChat, isGuest, onRequireAuth }) {
-  // followState: "none" | "pending" | "following" - kapali profillerde
-  // dogrudan follows yerine follow_requests (pet_id=null) akisi kullanilir.
-  const [followState, setFollowState] = useState("none");
-  const [targetIsPrivate, setTargetIsPrivate] = useState(null);
+  const { followState, followLabel, isSelf, disabled, toggleFollow } = useHumanFollow({
+    session,
+    userId,
+    targetId: target.authorId,
+    isGuest,
+    onRequireAuth,
+  });
   const [listOpen, setListOpen] = useState(null);
   const [counts, setCounts] = useState({ followers: 0, following: 0 });
-  const isSelf = !!userId && userId === target.authorId;
 
   useEffect(() => {
     if (!target.authorId) return;
@@ -23,75 +26,7 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
     ])
       .then(([followers, followingCount]) => setCounts({ followers, following: followingCount }))
       .catch(() => {});
-    supabaseSelect("profiles", session?.access_token, `select=is_private&id=eq.${target.authorId}`)
-      .then((rows) => setTargetIsPrivate(!!rows[0]?.is_private))
-      .catch(() => {});
-    if (userId && !isSelf) {
-      supabaseSelect("follows", session?.access_token, `select=follower_id&follower_id=eq.${userId}&following_id=eq.${target.authorId}`)
-        .then((rows) => {
-          if (rows.length > 0) {
-            setFollowState("following");
-            return;
-          }
-          return supabaseSelect(
-            "follow_requests",
-            session?.access_token,
-            `select=id&requester_id=eq.${userId}&target_id=eq.${target.authorId}&pet_id=is.null&status=eq.pending`
-          ).then((reqRows) => setFollowState(reqRows.length > 0 ? "pending" : "none"));
-        })
-        .catch(() => {});
-    }
-  }, [target.authorId, userId]);
-
-  const toggleFollow = async () => {
-    if (isGuest) return onRequireAuth();
-    if (isSelf) return;
-    // Gizlilik bilgisi henuz yuklenmediyse (veya sorgu hata verdiyse)
-    // dogrudan takip/istek karari verilemez - islem yapma.
-    if (targetIsPrivate === null) return;
-
-    if (followState === "following") {
-      setFollowState("none");
-      try {
-        await supabaseDelete("follows", session.access_token, `follower_id=eq.${userId}&following_id=eq.${target.authorId}`);
-      } catch (e) {
-        setFollowState("following");
-      }
-      return;
-    }
-
-    if (followState === "pending") {
-      setFollowState("none");
-      try {
-        await supabaseDelete(
-          "follow_requests",
-          session.access_token,
-          `requester_id=eq.${userId}&target_id=eq.${target.authorId}&pet_id=is.null&status=eq.pending`
-        );
-      } catch (e) {
-        setFollowState("pending");
-      }
-      return;
-    }
-
-    if (targetIsPrivate) {
-      setFollowState("pending");
-      try {
-        await supabaseInsert("follow_requests", session.access_token, { requester_id: userId, target_id: target.authorId });
-      } catch (e) {
-        setFollowState("none");
-      }
-    } else {
-      setFollowState("following");
-      try {
-        await supabaseInsert("follows", session.access_token, { follower_id: userId, following_id: target.authorId });
-      } catch (e) {
-        setFollowState("none");
-      }
-    }
-  };
-
-  const followLabel = followState === "following" ? "Takip ediliyor" : followState === "pending" ? "İstek gönderildi" : "Takip Et";
+  }, [target.authorId]);
 
   return (
     <div>
@@ -109,7 +44,7 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
           {!isSelf && (
             <button
               onClick={toggleFollow}
-              disabled={targetIsPrivate === null}
+              disabled={disabled}
               style={{
                 flex: 1,
                 background: followState === "none" ? C.pine : C.cream,
@@ -119,8 +54,8 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
                 padding: "9px 14px",
                 fontFamily: FONT_DISPLAY,
                 fontSize: 12.5,
-                cursor: targetIsPrivate === null ? "default" : "pointer",
-                opacity: targetIsPrivate === null ? 0.6 : 1,
+                cursor: disabled ? "default" : "pointer",
+                opacity: disabled ? 0.6 : 1,
               }}
             >
               {followLabel}
