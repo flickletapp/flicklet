@@ -4,7 +4,7 @@ import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
 import { TopBar, BlobAvatar, EmptyState, ErrorBanner } from "../../components/ui";
 import { FollowListModal } from "../../components/modals";
 import { MOCK_FOLLOWERS } from "../../mockData";
-import { supabaseUpdate, supabaseCount, supabaseSelect, supabaseUploadImage, supabaseRpc, supabaseInsert } from "../../lib/supabase/client";
+import { supabaseUpdate, supabaseCount, supabaseSelect, supabaseUploadImage, supabaseRpc, supabaseInsert, supabaseDelete } from "../../lib/supabase/client";
 
 const PET_TYPES = [
   { key: "cat", label: "Kedi", emoji: "🐱" },
@@ -26,7 +26,39 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
   const [newPetType, setNewPetType] = useState("cat");
   const [savingPet, setSavingPet] = useState(false);
   const [addPetError, setAddPetError] = useState("");
+  const [blockedUsers, setBlockedUsers] = useState([]);
+  const [blockedError, setBlockedError] = useState("");
+  const [confirmUnblockId, setConfirmUnblockId] = useState(null);
+  const [unblockingId, setUnblockingId] = useState(null);
   const avatarInputRef = useRef(null);
+
+  const refreshBlockedUsers = () => {
+    // RLS ("Kullanıcı kendi engel listesini görür") zaten sadece
+    // blocker_id=auth.uid() olan satirlari gosteriyor - karsi tarafin
+    // beni engelledigi durumlar burada hic gorunmez, ekstra filtre
+    // gerekmiyor.
+    supabaseSelect(
+      "blocks",
+      session?.access_token,
+      `select=blocked_id,profiles!blocks_blocked_id_fkey(display_name,handle)&blocker_id=eq.${userId}&order=created_at.desc`
+    )
+      .then(setBlockedUsers)
+      .catch(() => {});
+  };
+
+  const unblockUser = async (blockedId) => {
+    setConfirmUnblockId(null);
+    setBlockedError("");
+    setUnblockingId(blockedId);
+    try {
+      await supabaseDelete("blocks", session.access_token, `blocker_id=eq.${userId}&blocked_id=eq.${blockedId}`);
+      setBlockedUsers((cur) => cur.filter((b) => b.blocked_id !== blockedId));
+    } catch (e) {
+      setBlockedError(e.message);
+    } finally {
+      setUnblockingId(null);
+    }
+  };
 
   const savePet = async () => {
     if (!newPetName.trim()) return;
@@ -84,6 +116,7 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
     )
       .then(setPendingRequests)
       .catch(() => {});
+    refreshBlockedUsers();
   }, [userId]);
 
   const respondToRequest = async (requestId, newStatus, isPetRequest) => {
@@ -351,6 +384,43 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
           ))}
         </div>
 
+        <div style={{ fontFamily: FONT_DISPLAY, fontSize: 14, color: C.ink, margin: "22px 0 10px" }}>Engellenen Hesaplar</div>
+        {blockedError && <ErrorBanner style={{ marginBottom: 8 }}>{blockedError}</ErrorBanner>}
+        {blockedUsers.length === 0 ? (
+          <EmptyState padding="12px 0">Şu an kimseyi engellemiş değilsin.</EmptyState>
+        ) : (
+          blockedUsers.map((b) => (
+            <div
+              key={b.blocked_id}
+              style={{ display: "flex", alignItems: "center", gap: 10, background: C.cream, border: `1px solid ${C.line}`, borderRadius: 14, padding: "10px 12px", marginBottom: 8 }}
+            >
+              <BlobAvatar emoji="🙂" size={36} color={C.inkSoft} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: FONT_DISPLAY, fontSize: 13.5, color: C.ink }}>{b.profiles?.display_name || "Kullanıcı"}</div>
+                {b.profiles?.handle && <div style={{ fontFamily: FONT_BODY, fontSize: 11.5, color: C.inkSoft }}>{b.profiles.handle}</div>}
+              </div>
+              <button
+                onClick={() => setConfirmUnblockId(b.blocked_id)}
+                disabled={unblockingId === b.blocked_id}
+                style={{
+                  background: "none",
+                  color: C.coral,
+                  border: `1.5px solid ${C.coral}`,
+                  borderRadius: 10,
+                  padding: "7px 12px",
+                  fontFamily: FONT_DISPLAY,
+                  fontSize: 12,
+                  cursor: unblockingId === b.blocked_id ? "default" : "pointer",
+                  opacity: unblockingId === b.blocked_id ? 0.6 : 1,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {unblockingId === b.blocked_id ? "..." : "Engeli kaldır"}
+              </button>
+            </div>
+          ))
+        )}
+
         <div style={{ fontFamily: FONT_DISPLAY, fontSize: 14, color: C.ink, margin: "22px 0 10px" }}>Gönderilerim</div>
         {myPosts.length === 0 ? (
           <EmptyState padding="20px 0">Henüz gönderin yok.</EmptyState>
@@ -420,6 +490,37 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
             onOpenProfile && onOpenProfile(u);
           }}
         />
+      )}
+
+      {confirmUnblockId && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(36,33,29,0.45)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 50 }}
+          onClick={() => setConfirmUnblockId(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: C.paper, borderRadius: "22px 22px 0 0", padding: "20px 20px 28px", width: "100%", maxWidth: 480 }}
+          >
+            <div style={{ fontFamily: FONT_DISPLAY, fontSize: 17, color: C.ink, marginBottom: 8 }}>
+              {blockedUsers.find((b) => b.blocked_id === confirmUnblockId)?.profiles?.display_name || "Bu kullanıcının"} engeli kaldırılsın mı?
+            </div>
+            <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, marginBottom: 20, lineHeight: 1.5 }}>
+              Birbirinizi tekrar takip edebilir, takip isteği gönderebilirsiniz.
+            </div>
+            <button
+              onClick={() => unblockUser(confirmUnblockId)}
+              style={{ width: "100%", marginBottom: 8, background: C.pine, color: C.cream, border: "none", borderRadius: 12, padding: "12px 14px", fontFamily: FONT_DISPLAY, fontSize: 13.5, cursor: "pointer" }}
+            >
+              Engeli kaldır
+            </button>
+            <button
+              onClick={() => setConfirmUnblockId(null)}
+              style={{ width: "100%", background: "none", color: C.inkSoft, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: "12px 14px", fontFamily: FONT_DISPLAY, fontSize: 13.5, cursor: "pointer" }}
+            >
+              Vazgeç
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
