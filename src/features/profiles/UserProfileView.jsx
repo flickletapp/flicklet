@@ -3,10 +3,10 @@ import { Mail, X } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
 import { TopBar, BlobAvatar, ErrorBanner } from "../../components/ui";
 import { FollowListModal } from "../../components/modals";
-import { MOCK_FOLLOWERS } from "../../mockData";
 import { supabaseCount, supabaseSelect, supabaseDelete, supabaseRpc } from "../../lib/supabase/client";
 import { useHumanFollow } from "./useHumanFollow";
 import { usePetFollow } from "./usePetFollow";
+import { fetchFollowList } from "./followList";
 
 function PetFollowRow({ pet, session, userId, ownerId, isGuest, onRequireAuth }) {
   const { followState, followLabel, isOwn, disabled, toggleFollow } = usePetFollow({
@@ -61,6 +61,9 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
   const [confirmBlockOpen, setConfirmBlockOpen] = useState(false);
   const [blockWorking, setBlockWorking] = useState(false);
   const [blockError, setBlockError] = useState("");
+  const [followListData, setFollowListData] = useState([]);
+  const [followListLoading, setFollowListLoading] = useState(false);
+  const [followListError, setFollowListError] = useState("");
   const { followState, followLabel, isSelf, disabled, toggleFollow } = useHumanFollow({
     session,
     userId,
@@ -104,6 +107,16 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
       .catch(() => {});
     refreshBlockState();
   }, [target.authorId, userId]);
+
+  const openFollowList = (kind) => {
+    setListOpen(kind);
+    setFollowListError("");
+    setFollowListLoading(true);
+    fetchFollowList(session, target.authorId, kind)
+      .then(setFollowListData)
+      .catch((e) => setFollowListError(e.message))
+      .finally(() => setFollowListLoading(false));
+  };
 
   const confirmBlock = async () => {
     setConfirmBlockOpen(false);
@@ -257,11 +270,11 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
         </div>
 
         <div style={{ display: "flex", gap: 10, marginBottom: 22 }}>
-          <div onClick={() => setListOpen("followers")} style={{ flex: 1, textAlign: "center", background: C.cream, border: `1px solid ${C.line}`, borderRadius: 14, padding: "12px 0", cursor: "pointer" }}>
+          <div onClick={() => openFollowList("followers")} style={{ flex: 1, textAlign: "center", background: C.cream, border: `1px solid ${C.line}`, borderRadius: 14, padding: "12px 0", cursor: "pointer" }}>
             <div style={{ fontFamily: FONT_DISPLAY, fontSize: 17, color: C.ink }}>{counts.followers}</div>
             <div style={{ fontFamily: FONT_BODY, fontSize: 11, color: C.inkSoft }}>Takipçi</div>
           </div>
-          <div onClick={() => setListOpen("following")} style={{ flex: 1, textAlign: "center", background: C.cream, border: `1px solid ${C.line}`, borderRadius: 14, padding: "12px 0", cursor: "pointer" }}>
+          <div onClick={() => openFollowList("following")} style={{ flex: 1, textAlign: "center", background: C.cream, border: `1px solid ${C.line}`, borderRadius: 14, padding: "12px 0", cursor: "pointer" }}>
             <div style={{ fontFamily: FONT_DISPLAY, fontSize: 17, color: C.ink }}>{counts.following}</div>
             <div style={{ fontFamily: FONT_BODY, fontSize: 11, color: C.inkSoft }}>Takip</div>
           </div>
@@ -280,7 +293,9 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
       {listOpen && (
         <FollowListModal
           title={listOpen === "followers" ? "Takipçiler" : "Takip Edilenler"}
-          list={MOCK_FOLLOWERS}
+          list={followListData}
+          loading={followListLoading}
+          error={followListError}
           onClose={() => setListOpen(null)}
           onOpenProfile={(u) => {
             setListOpen(null);

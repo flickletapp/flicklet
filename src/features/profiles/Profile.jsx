@@ -4,6 +4,7 @@ import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
 import { TopBar, BlobAvatar, EmptyState, ErrorBanner } from "../../components/ui";
 import { FollowListModal } from "../../components/modals";
 import { supabaseUpdate, supabaseCount, supabaseSelect, supabaseUploadImage, supabaseRpc, supabaseInsert, supabaseDelete } from "../../lib/supabase/client";
+import { fetchFollowList } from "./followList";
 
 const PET_TYPES = [
   { key: "cat", label: "Kedi", emoji: "🐱" },
@@ -34,32 +35,12 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
   const [followListError, setFollowListError] = useState("");
   const avatarInputRef = useRef(null);
 
-  // `follows` tablosunun profiles'a IKI ayri FK'si var (follower_id ve
-  // following_id) - hangi yonu istedigimizi acikca belirtmezsek
-  // PostgREST "birden fazla iliski bulundu" hatasi verir. Constraint
-  // adlari migration dosyasindan (001_baseline_schema.sql) dogrulandi,
-  // tahmin edilmedi: follows_follower_id_fkey / follows_following_id_fkey.
   const openFollowList = (kind) => {
     setListOpen(kind);
     setFollowListError("");
     setFollowListLoading(true);
-    const query =
-      kind === "followers"
-        ? `select=follower_id,profiles!follows_follower_id_fkey(display_name,handle,avatar_url)&following_id=eq.${userId}`
-        : `select=following_id,profiles!follows_following_id_fkey(display_name,handle,avatar_url)&follower_id=eq.${userId}`;
-    supabaseSelect("follows", session?.access_token, query)
-      .then((rows) => {
-        const mapped = rows.map((r) => {
-          const p = r.profiles || {};
-          return {
-            authorId: kind === "followers" ? r.follower_id : r.following_id,
-            human: p.display_name || "Kullanıcı",
-            handle: p.handle || "",
-            avatarUrl: p.avatar_url || null,
-          };
-        });
-        setFollowListData(mapped);
-      })
+    fetchFollowList(session, userId, kind)
+      .then(setFollowListData)
       .catch((e) => setFollowListError(e.message))
       .finally(() => setFollowListLoading(false));
   };
