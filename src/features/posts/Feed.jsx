@@ -4,7 +4,7 @@ import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
 import { TopBar, BlobAvatar, PawBadge, LoadingState, EmptyState, ErrorBanner } from "../../components/ui";
 import { CommentsModal } from "../../components/modals";
 import { TRENDING } from "../../mockData";
-import { supabaseSelect, supabaseInsert, supabaseUpsert, supabaseDelete, supabaseCount } from "../../lib/supabase/client";
+import { supabaseSelect, supabaseInsert, supabaseUpsert, supabaseDelete, supabaseCount, supabaseRpc } from "../../lib/supabase/client";
 import { useHumanFollow } from "../profiles/useHumanFollow";
 
 function todayStr() {
@@ -35,8 +35,17 @@ async function loadFeed(session, userId) {
     followingIds = new Set(followRows.map((f) => f.following_id));
     const voteRows = await supabaseSelect("contest_votes", session?.access_token, `select=id&voter_id=eq.${userId}&voted_on=eq.${todayStr()}`);
     hasVotedToday = voteRows.length > 0;
-    const blockRows = await supabaseSelect("blocks", session?.access_token, `select=blocked_id&blocker_id=eq.${userId}`);
-    blockedIds = new Set(blockRows.map((b) => b.blocked_id));
+    // Savunmacı istemci filtresi: asil garanti artik posts_select RLS'i
+    // (bkz. 006_posts_visibility_block_check - iki yonlu engel, contest
+    // istisnasi dahil TUM gorunurlugu kapsiyor). Bu, sadece onceden
+    // yuklenmis/gecikmis bir listede kalan karti da yakalayan ek bir
+    // katman - iki yonlu (blocked_among), tek yonlu "sadece kendi
+    // blokladiklarim" yerine.
+    const authorIds = [...new Set(rows.map((r) => r.author_id))];
+    if (authorIds.length > 0) {
+      const blockedRows = await supabaseRpc("blocked_among", session?.access_token, { candidate_ids: authorIds }).catch(() => []);
+      blockedIds = new Set((blockedRows || []).map((b) => b.blocked_id));
+    }
   }
   return rows
     .filter((r) => !blockedIds.has(r.author_id))
