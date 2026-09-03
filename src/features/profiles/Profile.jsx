@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Lock, Globe, Plus, Camera, LogOut, X, Heart, MessageCircle } from "lucide-react";
+import { Lock, Globe, Plus, Camera, LogOut, X, Heart, MessageCircle, Ban, ChevronRight } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
 import { TopBar, BlobAvatar, EmptyState, ErrorBanner } from "../../components/ui";
 import { FollowListModal } from "../../components/modals";
@@ -30,6 +30,7 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
   const [blockedError, setBlockedError] = useState("");
   const [confirmUnblockId, setConfirmUnblockId] = useState(null);
   const [unblockingId, setUnblockingId] = useState(null);
+  const [blockedPanelOpen, setBlockedPanelOpen] = useState(false);
   const [followListData, setFollowListData] = useState([]);
   const [followListLoading, setFollowListLoading] = useState(false);
   const [followListError, setFollowListError] = useState("");
@@ -117,7 +118,7 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
     supabaseSelect(
       "blocks",
       session?.access_token,
-      `select=blocked_id,profiles!blocks_blocked_id_fkey(display_name,handle)&blocker_id=eq.${userId}&order=created_at.desc`
+      `select=blocked_id,profiles!blocks_blocked_id_fkey(display_name,handle,avatar_url)&blocker_id=eq.${userId}&order=created_at.desc`
     )
       .then(setBlockedUsers)
       .catch(() => {});
@@ -461,42 +462,22 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
           ))}
         </div>
 
-        <div style={{ fontFamily: FONT_DISPLAY, fontSize: 14, color: C.ink, margin: "22px 0 10px" }}>Engellenen Hesaplar</div>
-        {blockedError && <ErrorBanner style={{ marginBottom: 8 }}>{blockedError}</ErrorBanner>}
-        {blockedUsers.length === 0 ? (
-          <EmptyState padding="12px 0">Şu an kimseyi engellemiş değilsin.</EmptyState>
-        ) : (
-          blockedUsers.map((b) => (
-            <div
-              key={b.blocked_id}
-              style={{ display: "flex", alignItems: "center", gap: 10, background: C.cream, border: `1px solid ${C.line}`, borderRadius: 14, padding: "10px 12px", marginBottom: 8 }}
-            >
-              <BlobAvatar emoji="🙂" size={36} color={C.inkSoft} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: FONT_DISPLAY, fontSize: 13.5, color: C.ink }}>{b.profiles?.display_name || "Kullanıcı"}</div>
-                {b.profiles?.handle && <div style={{ fontFamily: FONT_BODY, fontSize: 11.5, color: C.inkSoft }}>{b.profiles.handle}</div>}
-              </div>
-              <button
-                onClick={() => setConfirmUnblockId(b.blocked_id)}
-                disabled={unblockingId === b.blocked_id}
-                style={{
-                  background: "none",
-                  color: C.coral,
-                  border: `1.5px solid ${C.coral}`,
-                  borderRadius: 10,
-                  padding: "7px 12px",
-                  fontFamily: FONT_DISPLAY,
-                  fontSize: 12,
-                  cursor: unblockingId === b.blocked_id ? "default" : "pointer",
-                  opacity: unblockingId === b.blocked_id ? 0.6 : 1,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {unblockingId === b.blocked_id ? "..." : "Engeli kaldır"}
-              </button>
-            </div>
-          ))
-        )}
+        <div style={{ fontFamily: FONT_DISPLAY, fontSize: 14, color: C.ink, margin: "22px 0 10px" }}>Ayarlar</div>
+        <div
+          onClick={() => setBlockedPanelOpen(true)}
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: C.cream, border: `1px solid ${C.line}`, borderRadius: 14, padding: "14px 16px", cursor: "pointer" }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Ban size={18} color={C.inkSoft} />
+            <div style={{ fontFamily: FONT_DISPLAY, fontSize: 13.5, color: C.ink }}>Engellenen Hesaplar</div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {blockedUsers.length > 0 && (
+              <span style={{ fontFamily: FONT_BODY, fontSize: 12, color: C.inkSoft }}>{blockedUsers.length}</span>
+            )}
+            <ChevronRight size={18} color={C.inkSoft} />
+          </div>
+        </div>
 
         <div style={{ fontFamily: FONT_DISPLAY, fontSize: 14, color: C.ink, margin: "22px 0 10px" }}>Gönderilerim</div>
         {postDeleteError && <ErrorBanner style={{ marginBottom: 8 }}>{postDeleteError}</ErrorBanner>}
@@ -556,10 +537,14 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
                   </div>
 
                   {p.imageUrl && (
+                    // Ana akistaki (Feed.jsx PostCard) ile AYNI gosterim yontemi:
+                    // objectFit "contain" - goruntu kirpilmiyor, gerekirse
+                    // C.paper zeminle bosluklu gosteriliyor. Sadece kompakt
+                    // kart baglaminda maxHeight dusuruldu, mantik ayni.
                     <img
                       src={p.imageUrl}
                       alt={p.caption}
-                      style={{ width: "100%", maxHeight: 320, objectFit: "cover", borderRadius: 12, display: "block", marginBottom: 10, background: C.paper }}
+                      style={{ width: "100%", maxHeight: 320, objectFit: "contain", borderRadius: 12, display: "block", marginBottom: 10, background: C.paper }}
                     />
                   )}
 
@@ -650,6 +635,64 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
             onOpenProfile && onOpenProfile(u);
           }}
         />
+      )}
+
+      {blockedPanelOpen && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(36,33,29,0.45)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 50 }}
+          onClick={() => setBlockedPanelOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: C.paper, borderRadius: "22px 22px 0 0", padding: "18px 18px 24px", width: "100%", maxWidth: 480, maxHeight: "65vh", overflowY: "auto" }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <div style={{ fontFamily: FONT_DISPLAY, fontSize: 16, color: C.ink }}>Engellenen Hesaplar</div>
+              <button onClick={() => setBlockedPanelOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: C.inkSoft }}>
+                <X size={20} />
+              </button>
+            </div>
+            {blockedError && <ErrorBanner style={{ marginBottom: 8 }}>{blockedError}</ErrorBanner>}
+            {blockedUsers.length === 0 ? (
+              <EmptyState padding="20px 0">Şu an kimseyi engellemiş değilsin.</EmptyState>
+            ) : (
+              blockedUsers.map((b) => (
+                <div
+                  key={b.blocked_id}
+                  style={{ display: "flex", alignItems: "center", gap: 10, background: C.cream, border: `1px solid ${C.line}`, borderRadius: 14, padding: "10px 12px", marginBottom: 8 }}
+                >
+                  {b.profiles?.avatar_url ? (
+                    <img src={b.profiles.avatar_url} alt="" style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover" }} />
+                  ) : (
+                    <BlobAvatar emoji="🙂" size={36} color={C.inkSoft} />
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontFamily: FONT_DISPLAY, fontSize: 13.5, color: C.ink }}>{b.profiles?.display_name || "Kullanıcı"}</div>
+                    {b.profiles?.handle && <div style={{ fontFamily: FONT_BODY, fontSize: 11.5, color: C.inkSoft }}>{b.profiles.handle}</div>}
+                  </div>
+                  <button
+                    onClick={() => setConfirmUnblockId(b.blocked_id)}
+                    disabled={unblockingId === b.blocked_id}
+                    style={{
+                      background: "none",
+                      color: C.coral,
+                      border: `1.5px solid ${C.coral}`,
+                      borderRadius: 10,
+                      padding: "7px 12px",
+                      fontFamily: FONT_DISPLAY,
+                      fontSize: 12,
+                      cursor: unblockingId === b.blocked_id ? "default" : "pointer",
+                      opacity: unblockingId === b.blocked_id ? 0.6 : 1,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {unblockingId === b.blocked_id ? "..." : "Engeli kaldır"}
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       )}
 
       {confirmUnblockId && (
