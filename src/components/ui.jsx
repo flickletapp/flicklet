@@ -260,7 +260,7 @@ export function DesktopSideNav({ tab, setTab, isGuest, onRequireAuth, onAdd }) {
   return (
     <nav className="fl-sidenav">
       <div style={{ padding: "6px 14px 22px" }}>
-        <FlickletLogo size={21} />
+        <img src="/flicklet-mark.png" alt="Flicklet" style={{ width: 52, height: 52, display: "block" }} />
       </div>
       {items.map((it) => {
         const Icon = it.icon;

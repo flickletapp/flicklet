@@ -348,7 +348,7 @@ export function FeedScreen({ session, userId, myName, onOpenComplaint, onOpenPro
   return (
     <div>
       <TopBar
-        title={<FlickletLogo className="fl-hide-desktop" />}
+        title={<FlickletLogo />}
         right={
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <button onClick={() => (isGuest ? onRequireAuth() : onOpenSearch())} style={{ background: "none", border: "none", cursor: "pointer", color: C.ink, padding: 0, display: "flex" }}>
