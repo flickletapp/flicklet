@@ -267,7 +267,36 @@ export function DesktopSideNav({ tab, setTab, isGuest, onRequireAuth, onAdd }) {
           dusulerek secildi (gorunen sol kenar nav ikonlarindan ~10 px
           saga gelsin diye). Boyut (52x52) ve dosya degismedi. */}
       <div style={{ padding: "22px 14px 26px 20px" }}>
-        <img src="/flicklet-mark.png" alt="Flicklet" style={{ width: 52, height: 52, display: "block" }} />
+        {/* Amblem = ana akisa donus. "Akis" satiriyla AYNI yontem
+            (setTab("feed")) kullaniliyor, ikinci bir navigasyon sistemi
+            yok. "feed" sekmesi misafirde de acik oldugu icin (NavBar ile
+            ayni kural) giris penceresi acilmiyor. Zaten akistaysak sekme
+            degistirilmiyor, sadece en uste kaydiriliyor. <button>
+            oldugu icin Enter ve Space kendiliginden calisiyor;
+            gorsel tepki sadece hafif opaklik (sekil/renk degismiyor). */}
+        <button
+          type="button"
+          className="fl-logo-btn"
+          aria-label="Ana akışa git"
+          onClick={() => {
+            if (tab !== "feed") {
+              setTab("feed");
+              return;
+            }
+            // Zaten akistayiz: sayfa yenilenmiyor, sadece en uste kaydiriliyor.
+            const before = window.scrollY;
+            if (before === 0) return;
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            // Bazi ortamlar/ayarlar yumusak kaydirmayi sessizce yok
+            // sayiyor; kisa bir sure sonra hic hareket olmadiysa aninda
+            // en uste al ki davranis her yerde garanti olsun.
+            window.setTimeout(() => {
+              if (window.scrollY === before) window.scrollTo(0, 0);
+            }, 80);
+          }}
+        >
+          <img src="/flicklet-mark.png" alt="" style={{ width: 52, height: 52, display: "block" }} />
+        </button>
       </div>
       {items.map((it) => {
         const Icon = it.icon;

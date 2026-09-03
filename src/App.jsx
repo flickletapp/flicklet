@@ -128,6 +128,28 @@ export default function FlickletApp() {
           }
         }
 
+        /* Sol menudeki amblem butonu: konum/boyut degismesin diye
+           padding yok, sadece imleç + cok hafif opaklik tepkisi.
+           Amblemin sekli ve renkleri degistirilmiyor. Tiklama alani
+           amblemin kendisi = 52x52 px (>= 44x44 gereksinimi). */
+        .fl-logo-btn {
+          background: none;
+          border: none;
+          padding: 0;
+          margin: 0;
+          display: block;
+          line-height: 0;
+          cursor: pointer;
+          border-radius: 12px;
+          transition: opacity 0.12s ease;
+        }
+        .fl-logo-btn:hover { opacity: 0.85; }
+        .fl-logo-btn:active { opacity: 0.72; }
+        .fl-logo-btn:focus-visible {
+          outline: 2px solid ${C.pine};
+          outline-offset: 3px;
+        }
+
         /* Takipci/Takip listesi (ve benzeri) modal: telefonda alt sayfa
            (bottom-sheet, degismedi), tablet/masaustunde (>=768px)
            ekranin ortasinda sabit genislikte modal. Baslik+kapat sabit,
