@@ -323,7 +323,10 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
       {confirmBlockOpen && (
         <div
           style={{ position: "fixed", inset: 0, background: "rgba(36,33,29,0.45)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 50 }}
-          onClick={() => setConfirmBlockOpen(false)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setConfirmBlockOpen(false);
+          }}
         >
           <div
             onClick={(e) => e.stopPropagation()}

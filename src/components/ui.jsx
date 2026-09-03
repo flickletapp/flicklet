@@ -235,6 +235,17 @@ export function NavBar({ tab, setTab, isGuest, onRequireAuth, onAdd }) {
   );
 }
 
+// Tek marka standardı: TopBar'daki mevcut "Flicklet" görünümü (FONT_DISPLAY,
+// 500 kalınlık, C.pine rengi). Sadece boyut (size) bağlama göre değişir -
+// yazı karakteri/kalınlık/renk her yerde birebir aynı kalır.
+export function FlickletLogo({ size = 18, className, style }) {
+  return (
+    <span className={className} style={{ fontFamily: FONT_DISPLAY, fontWeight: 500, fontSize: size, color: C.pine, ...style }}>
+      Flicklet
+    </span>
+  );
+}
+
 // Genis ekranda (>=1024px) alt navigasyonun yerini alan sabit sol dikey menu.
 // Sekme/guest/ekle mantigi NavBar ile birebir ayni, sadece yerlesim dikey.
 export function DesktopSideNav({ tab, setTab, isGuest, onRequireAuth, onAdd }) {
@@ -247,7 +258,9 @@ export function DesktopSideNav({ tab, setTab, isGuest, onRequireAuth, onAdd }) {
   ];
   return (
     <nav className="fl-sidenav">
-      <div style={{ fontFamily: FONT_DISPLAY, fontSize: 21, color: C.pine, padding: "6px 14px 22px" }}>Flicklet</div>
+      <div style={{ padding: "6px 14px 22px" }}>
+        <FlickletLogo size={21} />
+      </div>
       {items.map((it) => {
         const Icon = it.icon;
         const active = tab === it.key;

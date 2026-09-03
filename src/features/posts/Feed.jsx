@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Heart, MessageCircle, Trophy, Flag, X, Search, Mail, Flame, Plus } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
-import { TopBar, BlobAvatar, PawBadge, LoadingState, EmptyState, ErrorBanner, TrendingSection } from "../../components/ui";
+import { TopBar, BlobAvatar, PawBadge, LoadingState, EmptyState, ErrorBanner, TrendingSection, FlickletLogo } from "../../components/ui";
 import { CommentsModal } from "../../components/modals";
 import { supabaseSelect, supabaseInsert, supabaseUpsert, supabaseDelete, supabaseCount, supabaseRpc } from "../../lib/supabase/client";
 import { useHumanFollow } from "../profiles/useHumanFollow";
@@ -348,7 +348,7 @@ export function FeedScreen({ session, userId, myName, onOpenComplaint, onOpenPro
   return (
     <div>
       <TopBar
-        title={<span style={{ color: C.pine }}>Flicklet</span>}
+        title={<FlickletLogo className="fl-hide-desktop" />}
         right={
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <button onClick={() => (isGuest ? onRequireAuth() : onOpenSearch())} style={{ background: "none", border: "none", cursor: "pointer", color: C.ink, padding: 0, display: "flex" }}>

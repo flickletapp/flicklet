@@ -16,7 +16,10 @@ export function FollowListModal({ title, list, loading, error, onClose, onOpenPr
         justifyContent: "center",
         zIndex: 50,
       }}
-      onClick={onClose}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -116,7 +119,10 @@ export function CommentsModal({ post, session, userId, myName, onClose, onCommen
         justifyContent: "center",
         zIndex: 50,
       }}
-      onClick={onClose}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -214,7 +220,10 @@ export function ComplaintModal({ postId, session, userId, onClose }) {
         justifyContent: "center",
         zIndex: 50,
       }}
-      onClick={onClose}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -282,7 +291,10 @@ export function SignupPromptModal({ onClose, onSignup }) {
         zIndex: 60,
         padding: 20,
       }}
-      onClick={onClose}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
     >
       <div
         onClick={(e) => e.stopPropagation()}

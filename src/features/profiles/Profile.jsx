@@ -629,7 +629,10 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
       {settingsOpen && (
         <div
           style={{ position: "fixed", inset: 0, background: "rgba(36,33,29,0.45)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 50 }}
-          onClick={() => setSettingsOpen(false)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setSettingsOpen(false);
+          }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
@@ -747,7 +750,7 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
       {editProfileOpen && (
         <div
           style={{ position: "fixed", inset: 0, background: "rgba(36,33,29,0.45)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 55 }}
-          onClick={() => setEditProfileOpen(false)}
+          onClick={(e) => e.stopPropagation()}
         >
           <div
             onClick={(e) => e.stopPropagation()}
@@ -800,7 +803,10 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
       {blockedPanelOpen && (
         <div
           style={{ position: "fixed", inset: 0, background: "rgba(36,33,29,0.45)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 50 }}
-          onClick={() => setBlockedPanelOpen(false)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setBlockedPanelOpen(false);
+          }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
@@ -858,7 +864,10 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
       {confirmUnblockId && (
         <div
           style={{ position: "fixed", inset: 0, background: "rgba(36,33,29,0.45)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 50 }}
-          onClick={() => setConfirmUnblockId(null)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setConfirmUnblockId(null);
+          }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
@@ -889,7 +898,10 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
       {confirmDeletePostId && (
         <div
           style={{ position: "fixed", inset: 0, background: "rgba(36,33,29,0.45)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 50 }}
-          onClick={() => setConfirmDeletePostId(null)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setConfirmDeletePostId(null);
+          }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
