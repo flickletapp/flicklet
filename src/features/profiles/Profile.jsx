@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Lock, Globe, Plus, Camera, LogOut, X } from "lucide-react";
+import { Lock, Globe, Plus, Camera, LogOut, X, Heart, MessageCircle } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
 import { TopBar, BlobAvatar, EmptyState, ErrorBanner } from "../../components/ui";
 import { FollowListModal } from "../../components/modals";
@@ -37,7 +37,47 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
   const [confirmDeletePostId, setConfirmDeletePostId] = useState(null);
   const [deletingPostId, setDeletingPostId] = useState(null);
   const [postDeleteError, setPostDeleteError] = useState("");
+  const [expandedPostIds, setExpandedPostIds] = useState(() => new Set());
   const avatarInputRef = useRef(null);
+
+  // Gonderilerim karti icin gereken tum veriyi (pet baglantisi, begeni/
+  // yorum sayisi) tek seferde hazirlar - Feed.jsx'teki post_pets/pets
+  // FK hint'leri ve tekillestirme deseniyle ayni (posts_pet_id_fkey/
+  // post_pets_pet_id_fkey, migration dosyasindan dogrulandi).
+  const loadMyPosts = async () => {
+    const rows = await supabaseSelect(
+      "posts",
+      session?.access_token,
+      `select=id,image_url,caption,created_at,pets!posts_pet_id_fkey(id,name,emoji),post_pets(pets!post_pets_pet_id_fkey(id,name,emoji))&author_id=eq.${userId}&order=created_at.desc`
+    );
+    const postIds = rows.map((r) => r.id);
+    let likeRows = [];
+    let commentRows = [];
+    if (postIds.length > 0) {
+      const idList = postIds.join(",");
+      [likeRows, commentRows] = await Promise.all([
+        supabaseSelect("likes", session?.access_token, `select=post_id&post_id=in.(${idList})`),
+        supabaseSelect("comments", session?.access_token, `select=post_id&post_id=in.(${idList})`),
+      ]);
+    }
+    return rows.map((r) => {
+      const linkedPets = (r.post_pets || []).map((pp) => pp.pets).filter(Boolean);
+      const petMap = new Map();
+      [r.pets, ...linkedPets].forEach((p) => {
+        if (p && p.id) petMap.set(p.id, p);
+      });
+      const pets = Array.from(petMap.values());
+      return {
+        id: r.id,
+        imageUrl: r.image_url,
+        caption: r.caption,
+        createdAt: r.created_at,
+        petsLabel: pets.length > 0 ? pets.map((p) => `${p.emoji || "🐾"} ${p.name}`).join(" & ") : null,
+        likeCount: likeRows.filter((l) => l.post_id === r.id).length,
+        commentCount: commentRows.filter((c) => c.post_id === r.id).length,
+      };
+    });
+  };
 
   const deletePost = async (postId) => {
     setConfirmDeletePostId(null);
@@ -135,7 +175,7 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
     ])
       .then(([followers, following, posts]) => setCounts({ followers, following, posts }))
       .catch(() => {});
-    supabaseSelect("posts", session?.access_token, `select=id,image_url,caption&author_id=eq.${userId}&order=created_at.desc`)
+    loadMyPosts()
       .then(setMyPosts)
       .catch(() => {});
     supabaseSelect("profiles", session?.access_token, `select=avatar_url,dm_policy&id=eq.${userId}`)
@@ -461,76 +501,117 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
         <div style={{ fontFamily: FONT_DISPLAY, fontSize: 14, color: C.ink, margin: "22px 0 10px" }}>Gönderilerim</div>
         {postDeleteError && <ErrorBanner style={{ marginBottom: 8 }}>{postDeleteError}</ErrorBanner>}
         {myPosts.length === 0 ? (
-          <EmptyState padding="20px 0">Henüz gönderin yok.</EmptyState>
+          <EmptyState padding="24px 0">Henüz gönderin yok — ilk flick'ini paylaş 🐾</EmptyState>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-            {myPosts.map((p) => (
-              <div key={p.id} style={{ position: "relative" }}>
-                {p.image_url ? (
-                  <div style={{ aspectRatio: "1 / 1", borderRadius: 12, overflow: "hidden" }}>
-                    <img src={p.image_url} alt={p.caption} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      aspectRatio: "1 / 1",
-                      borderRadius: 12,
-                      background: C.cream,
-                      border: `1px solid ${C.line}`,
-                      padding: 8,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      textAlign: "center",
-                      fontFamily: FONT_BODY,
-                      fontSize: 11,
-                      color: C.inkSoft,
-                      overflow: "hidden",
-                    }}
-                  >
-                    {p.caption}
-                  </div>
-                )}
-                <button
-                  onClick={() => setPostMenuOpenId((cur) => (cur === p.id ? null : p.id))}
+          <div>
+            {myPosts.map((p) => {
+              const isLong = (p.caption || "").length > 220;
+              const expanded = expandedPostIds.has(p.id);
+              const dateLabel = p.createdAt
+                ? new Date(p.createdAt).toLocaleDateString("tr-TR", { day: "numeric", month: "short" })
+                : null;
+              return (
+                <div
+                  key={p.id}
                   style={{
-                    position: "absolute",
-                    top: 4,
-                    right: 4,
-                    width: 22,
-                    height: 22,
-                    borderRadius: "50%",
-                    background: "rgba(36,33,29,0.55)",
-                    color: "#fff",
-                    border: "none",
-                    cursor: "pointer",
-                    fontSize: 14,
-                    lineHeight: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
+                    position: "relative",
+                    background: "#fff",
+                    border: `1px solid ${C.line}`,
+                    borderRadius: 18,
+                    padding: 14,
+                    marginBottom: 12,
+                    boxSizing: "border-box",
+                    maxWidth: "100%",
+                    overflow: "hidden",
                   }}
                 >
-                  ⋯
-                </button>
-                {postMenuOpenId === p.id && (
-                  <div
-                    style={{ position: "absolute", top: 28, right: 4, background: C.cream, border: `1px solid ${C.line}`, borderRadius: 10, boxShadow: "0 6px 18px rgba(0,0,0,0.08)", zIndex: 10, minWidth: 140 }}
-                  >
-                    <button
-                      onClick={() => {
-                        setPostMenuOpenId(null);
-                        setConfirmDeletePostId(p.id);
-                      }}
-                      disabled={deletingPostId === p.id}
-                      style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "9px 11px", background: "none", border: "none", cursor: deletingPostId === p.id ? "default" : "pointer", fontFamily: FONT_BODY, fontSize: 12.5, color: C.coral, textAlign: "left", opacity: deletingPostId === p.id ? 0.6 : 1, whiteSpace: "nowrap" }}
-                    >
-                      <X size={13} /> {deletingPostId === p.id ? "Siliniyor..." : "Gönderiyi sil"}
-                    </button>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+                    <div style={{ fontFamily: FONT_DISPLAY, fontSize: 13, color: C.ink, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {p.petsLabel || "🐾 Gönderi"}
+                    </div>
+                    <div style={{ position: "relative", flexShrink: 0 }}>
+                      <button
+                        onClick={() => setPostMenuOpenId((cur) => (cur === p.id ? null : p.id))}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: C.inkSoft, fontSize: 18, padding: "0 4px", lineHeight: 1 }}
+                      >
+                        ⋯
+                      </button>
+                      {postMenuOpenId === p.id && (
+                        <div
+                          style={{ position: "absolute", right: 0, top: 24, background: C.cream, border: `1px solid ${C.line}`, borderRadius: 10, boxShadow: "0 6px 18px rgba(0,0,0,0.08)", zIndex: 10, minWidth: 140 }}
+                        >
+                          <button
+                            onClick={() => {
+                              setPostMenuOpenId(null);
+                              setConfirmDeletePostId(p.id);
+                            }}
+                            disabled={deletingPostId === p.id}
+                            style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "9px 11px", background: "none", border: "none", cursor: deletingPostId === p.id ? "default" : "pointer", fontFamily: FONT_BODY, fontSize: 12.5, color: C.coral, textAlign: "left", opacity: deletingPostId === p.id ? 0.6 : 1, whiteSpace: "nowrap" }}
+                          >
+                            <X size={13} /> {deletingPostId === p.id ? "Siliniyor..." : "Gönderiyi sil"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
-            ))}
+
+                  {p.imageUrl && (
+                    <img
+                      src={p.imageUrl}
+                      alt={p.caption}
+                      style={{ width: "100%", maxHeight: 320, objectFit: "cover", borderRadius: 12, display: "block", marginBottom: 10, background: C.paper }}
+                    />
+                  )}
+
+                  {p.caption && (
+                    <div
+                      style={{
+                        fontFamily: FONT_BODY,
+                        fontSize: 13.5,
+                        color: C.ink,
+                        lineHeight: 1.5,
+                        marginBottom: 4,
+                        wordBreak: "break-word",
+                        ...(!expanded && isLong
+                          ? { display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }
+                          : {}),
+                      }}
+                    >
+                      {p.caption}
+                    </div>
+                  )}
+                  {isLong && (
+                    <div
+                      onClick={() =>
+                        setExpandedPostIds((cur) => {
+                          const next = new Set(cur);
+                          if (next.has(p.id)) next.delete(p.id);
+                          else next.add(p.id);
+                          return next;
+                        })
+                      }
+                      style={{ fontFamily: FONT_BODY, fontSize: 12, fontWeight: 700, color: C.mustard, cursor: "pointer", marginBottom: 8 }}
+                    >
+                      {expanded ? "Daha az göster" : "Devamını gör"}
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, color: C.inkSoft }}>
+                      <Heart size={14} />
+                      <span style={{ fontFamily: FONT_BODY, fontSize: 12, color: C.inkSoft }}>{p.likeCount}</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, color: C.inkSoft }}>
+                      <MessageCircle size={14} />
+                      <span style={{ fontFamily: FONT_BODY, fontSize: 12, color: C.inkSoft }}>{p.commentCount}</span>
+                    </div>
+                    {dateLabel && (
+                      <span style={{ marginLeft: "auto", fontFamily: FONT_BODY, fontSize: 11, color: C.inkSoft, opacity: 0.7 }}>{dateLabel}</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
