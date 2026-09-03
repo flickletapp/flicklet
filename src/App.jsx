@@ -112,10 +112,53 @@ export default function FlickletApp() {
           .fl-trending {
             display: block;
             position: sticky;
-            top: 24px;
+            /* TopBar'in (~56px) hemen altinda, ana akisla ayni hizada
+               baslasin - ekranin tam tepesine yapismasin (bkz. tepe
+               yapismasi sikayeti). max-height + overflow, uzun icerikte
+               sayfanin geri kalanini bos birakmadan sadece kendi
+               icinde kaydirilmasini, kisa icerikte ise (mevcut durum)
+               olmasi gereken boyutta kalmasini saglar - ekran
+               yuksekligine zorla uzatilmiyor. */
+            top: 88px;
             width: 300px;
             flex: 0 0 300px;
             align-self: flex-start;
+            max-height: calc(100vh - 112px);
+            overflow-y: auto;
+          }
+        }
+
+        /* Takipci/Takip listesi (ve benzeri) modal: telefonda alt sayfa
+           (bottom-sheet, degismedi), tablet/masaustunde (>=768px)
+           ekranin ortasinda sabit genislikte modal. Baslik+kapat sabit,
+           sadece ic liste kaydiriliyor (bkz. FollowListModal). */
+        .fl-modal-backdrop {
+          position: fixed;
+          inset: 0;
+          display: flex;
+          align-items: flex-end;
+          justify-content: center;
+          z-index: 50;
+        }
+        .fl-modal-panel {
+          width: 100%;
+          max-width: 480px;
+          max-height: 70vh;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          border-radius: 22px 22px 0 0;
+        }
+        @media (min-width: 768px) {
+          .fl-modal-backdrop {
+            align-items: center;
+            padding: 24px;
+            box-sizing: border-box;
+          }
+          .fl-modal-panel {
+            max-width: 520px;
+            max-height: 80vh;
+            border-radius: 20px;
           }
         }
       `}</style>

@@ -36,6 +36,30 @@ export async function supabaseSignIn(email, password) {
   return supabaseAuth("token?grant_type=password", { email, password });
 }
 
+const EMAIL_SHAPE_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Kullanici adi VEYA e-posta ile giris. E-posta gibi görünüyorsa
+// dogrudan mevcut GoTrue akisi kullanilir (davranis degismedi). Aksi
+// halde, e-postayi asla istemciye/tarayici konsoluna sizdirmadan cozmek
+// icin sifreyi de dogrulayan guvenli bir RPC'ye (public.login_resolve_email,
+// bkz. 008_login_resolve_email migration) basvurulur - bu RPC, dogru
+// sifreyi bilmeyen biri icin e-postayi asla acmaz, o yuzden acik bir
+// "kullanici adi -> e-posta" arama motoru degildir.
+export async function supabaseSignInWithIdentifier(identifier, password) {
+  const trimmed = (identifier || "").trim();
+  if (EMAIL_SHAPE_RE.test(trimmed)) {
+    return supabaseSignIn(trimmed, password);
+  }
+  const resolvedEmail = await supabaseRpc("login_resolve_email", SUPABASE_KEY, {
+    p_identifier: trimmed,
+    p_password: password,
+  }).catch(() => null);
+  if (!resolvedEmail) {
+    throw new Error("Kullanıcı adı/e-posta veya şifre hatalı, ya da hesap henüz doğrulanmadı.");
+  }
+  return supabaseSignIn(resolvedEmail, password);
+}
+
 export async function supabaseFetchTable(path, accessToken) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     headers: {

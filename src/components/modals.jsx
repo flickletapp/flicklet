@@ -4,66 +4,53 @@ import { C, FONT_DISPLAY, FONT_BODY } from "../theme";
 import { BlobAvatar, PrimaryButton, LoadingState, EmptyState, ErrorBanner } from "./ui";
 import { supabaseSelect, supabaseInsert } from "../lib/supabase/client";
 
+// Telefonda alt sayfa (bottom-sheet), tablet/masaustunde (>=768px)
+// ekranin ortasinda sabit genislikte (480-560px) modal - bkz. .fl-modal-*
+// siniflari (App.jsx'in global stilinde tanimli). Baslik+kapat butonu
+// sabit kalir, sadece liste alani kendi icinde kaydirilir. Disariya
+// tiklamak SADECE kendi icinde kaliyor (stopPropagation) - kapatmiyor
+// da, arkaya da sizmiyor; kapatmanin tek yolu X.
 export function FollowListModal({ title, list, loading, error, onClose, onOpenProfile }) {
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(36,33,29,0.45)",
-        display: "flex",
-        alignItems: "flex-end",
-        justifyContent: "center",
-        zIndex: 50,
-      }}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClose();
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: C.paper,
-          borderRadius: "22px 22px 0 0",
-          padding: "18px 18px 24px",
-          width: "100%",
-          maxWidth: 480,
-          maxHeight: "65vh",
-          overflowY: "auto",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+    <div className="fl-modal-backdrop" style={{ background: "rgba(36,33,29,0.45)" }} onClick={(e) => e.stopPropagation()}>
+      <div className="fl-modal-panel" onClick={(e) => e.stopPropagation()} style={{ background: C.paper }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 18px 12px", flexShrink: 0 }}>
           <div style={{ fontFamily: FONT_DISPLAY, fontSize: 16, color: C.ink }}>{title}</div>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: C.inkSoft }}>
             <X size={20} />
           </button>
         </div>
-        {loading && <LoadingState padding="20px 0" />}
-        {!loading && error && <ErrorBanner>{error}</ErrorBanner>}
-        {!loading && !error && list.length === 0 && <EmptyState padding="20px 0">Henüz kimse yok.</EmptyState>}
-        {!loading &&
-          !error &&
-          list.map((u) => (
-            <div
-              key={u.authorId || u.handle}
-              onClick={() => {
-                onClose();
-                onOpenProfile(u);
-              }}
-              style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 4px", cursor: "pointer" }}
-            >
-              {u.avatarUrl ? (
-                <img src={u.avatarUrl} alt="" style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} />
-              ) : (
-                <BlobAvatar emoji={u.petEmoji || "🙂"} color={u.color || C.pine} size={40} />
-              )}
-              <div>
-                <div style={{ fontFamily: FONT_DISPLAY, fontSize: 13.5, color: C.ink }}>{u.human}</div>
-                <div style={{ fontFamily: FONT_BODY, fontSize: 11.5, color: C.inkSoft }}>{u.handle}</div>
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 18px 18px", minHeight: 0 }}>
+          {loading && <LoadingState padding="20px 0" />}
+          {!loading && error && <ErrorBanner>{error}</ErrorBanner>}
+          {!loading && !error && list.length === 0 && <EmptyState padding="20px 0">Henüz kimse yok.</EmptyState>}
+          {!loading &&
+            !error &&
+            list.map((u) => (
+              <div
+                key={u.authorId || u.handle}
+                onClick={() => {
+                  onClose();
+                  onOpenProfile(u);
+                }}
+                style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 4px", cursor: "pointer" }}
+              >
+                {u.avatarUrl ? (
+                  <img src={u.avatarUrl} alt="" style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                ) : (
+                  <BlobAvatar emoji={u.petEmoji || "🙂"} color={u.color || C.pine} size={40} />
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: FONT_DISPLAY, fontSize: 13.5, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {u.human}
+                  </div>
+                  <div style={{ fontFamily: FONT_BODY, fontSize: 11.5, color: C.inkSoft, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {u.handle}
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+        </div>
       </div>
     </div>
   );

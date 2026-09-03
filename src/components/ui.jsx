@@ -77,9 +77,10 @@ export function BlobAvatar({ emoji, size = 48, color = C.mustard }) {
   );
 }
 
-export function PrimaryButton({ children, onClick, style, disabled }) {
+export function PrimaryButton({ children, onClick, style, disabled, type = "button" }) {
   return (
     <button
+      type={type}
       onClick={onClick}
       disabled={disabled}
       style={{

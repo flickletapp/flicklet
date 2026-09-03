@@ -1,22 +1,23 @@
 import { useState } from "react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
 import { TextField, PrimaryButton, ErrorBanner } from "../../components/ui";
-import { supabaseSignUp, supabaseSignIn } from "../../lib/supabase/client";
+import { supabaseSignUp, supabaseSignInWithIdentifier } from "../../lib/supabase/client";
 
 export function AuthScreen({ onDone, onGuest }) {
-  const [mode, setMode] = useState("signup"); // signup | verify | login
-  const [email, setEmail] = useState("");
+  const [mode, setMode] = useState("login"); // login | signup | verify
+  const [identifier, setIdentifier] = useState("");
   const [pw, setPw] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const handleSignUp = async () => {
+    if (loading) return;
     setError("");
-    if (!email || !pw) return setError("E-posta ve şifre gerekli.");
+    if (!identifier || !pw) return setError("E-posta ve şifre gerekli.");
     if (pw.length < 8) return setError("Şifre en az 8 karakter olmalı.");
     setLoading(true);
     try {
-      const data = await supabaseSignUp(email, pw);
+      const data = await supabaseSignUp(identifier, pw);
       if (data?.identities && data.identities.length === 0) {
         setError("Bu e-posta zaten kayıtlı. Lütfen giriş yap.");
         setMode("login");
@@ -31,17 +32,25 @@ export function AuthScreen({ onDone, onGuest }) {
   };
 
   const handleLogin = async () => {
+    if (loading) return;
     setError("");
-    if (!email || !pw) return setError("E-posta ve şifre gerekli.");
+    if (!identifier || !pw) return setError("Kullanıcı adı/e-posta ve şifre gerekli.");
     setLoading(true);
     try {
-      const data = await supabaseSignIn(email, pw);
+      const data = await supabaseSignInWithIdentifier(identifier, pw);
       onDone(data);
     } catch (e) {
-      setError("E-posta veya şifre hatalı, ya da hesap henüz doğrulanmadı.");
+      setError("Kullanıcı adı/e-posta veya şifre hatalı, ya da hesap henüz doğrulanmadı.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (loading) return;
+    if (mode === "signup") handleSignUp();
+    else if (mode === "login") handleLogin();
   };
 
   return (
@@ -86,24 +95,36 @@ export function AuthScreen({ onDone, onGuest }) {
             🔒 Google ile giriş, uygulama yayına alındığında (gerçek domain bağlanınca) aktif olacak — şimdilik e-posta ile devam edin.
           </div>
 
-          <TextField label="E-posta" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="ornek@eposta.com" />
-          <TextField label="Şifre" type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="En az 8 karakter" />
-          <PrimaryButton style={{ width: "100%", marginTop: 8 }} disabled={loading} onClick={mode === "signup" ? handleSignUp : handleLogin}>
-            {loading ? "..." : mode === "signup" ? "Hesap Oluştur" : "Giriş Yap"}
-          </PrimaryButton>
+          <form onSubmit={handleSubmit}>
+            {mode === "login" ? (
+              <TextField
+                label="Kullanıcı adı veya e-posta"
+                type="text"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="kullaniciadi veya ornek@eposta.com"
+              />
+            ) : (
+              <TextField label="E-posta" type="email" value={identifier} onChange={(e) => setIdentifier(e.target.value)} placeholder="ornek@eposta.com" />
+            )}
+            <TextField label="Şifre" type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="En az 8 karakter" />
+            <PrimaryButton type="submit" style={{ width: "100%", marginTop: 8 }} disabled={loading}>
+              {loading ? "..." : mode === "signup" ? "Hesap Oluştur" : "Giriş Yap"}
+            </PrimaryButton>
+          </form>
           <div style={{ textAlign: "center", marginTop: 16, fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft }}>
-            {mode === "signup" ? (
+            {mode === "login" ? (
               <>
-                Zaten hesabın var mı?{" "}
-                <span onClick={() => setMode("login")} style={{ color: C.pine, fontWeight: 700, cursor: "pointer" }}>
-                  Giriş yap
+                Hesabın yok mu?{" "}
+                <span onClick={() => setMode("signup")} style={{ color: C.pine, fontWeight: 700, cursor: "pointer" }}>
+                  Hesap oluştur
                 </span>
               </>
             ) : (
               <>
-                Hesabın yok mu?{" "}
-                <span onClick={() => setMode("signup")} style={{ color: C.pine, fontWeight: 700, cursor: "pointer" }}>
-                  Kayıt ol
+                Zaten hesabın var mı?{" "}
+                <span onClick={() => setMode("login")} style={{ color: C.pine, fontWeight: 700, cursor: "pointer" }}>
+                  Giriş yap
                 </span>
               </>
             )}
@@ -132,7 +153,7 @@ export function AuthScreen({ onDone, onGuest }) {
           <div style={{ fontSize: 48, marginBottom: 12 }}>📩</div>
           <div style={{ fontFamily: FONT_DISPLAY, fontSize: 19, color: C.ink, marginBottom: 6 }}>E-postanı kontrol et</div>
           <div style={{ fontFamily: FONT_BODY, fontSize: 14, color: C.inkSoft, marginBottom: 24, lineHeight: 1.5 }}>
-            <strong>{email}</strong> adresine gerçek bir doğrulama bağlantısı gönderdik. Gelen kutunu (ve spam klasörünü) kontrol edip bağlantıya tıkla, sonra buraya dönüp giriş yap.
+            <strong>{identifier}</strong> adresine gerçek bir doğrulama bağlantısı gönderdik. Gelen kutunu (ve spam klasörünü) kontrol edip bağlantıya tıkla, sonra buraya dönüp giriş yap.
           </div>
           <PrimaryButton style={{ width: "100%" }} onClick={() => setMode("login")}>
             Doğruladım, giriş yap
