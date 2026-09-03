@@ -105,7 +105,7 @@ async function updateStreakAfterVote(session, userId) {
   return { currentMonthVotes: newVotes, badgeEarned };
 }
 
-export function PostCard({ post, session, userId, myName, onOpenComplaint, onOpenComments, onOpenProfile, isGuest, onRequireAuth, onStreakUpdate, onPostDeleted }) {
+export function PostCard({ post, session, userId, myName, onOpenComplaint, onOpenComments, onOpenProfile, isGuest, onRequireAuth, onStreakUpdate }) {
   const petsLabel =
     post.pets && post.pets.length > 0
       ? post.pets.map((p) => `${p.emoji || "🐾"} ${p.name}`).join(" & ")
@@ -119,9 +119,6 @@ export function PostCard({ post, session, userId, myName, onOpenComplaint, onOpe
   const [menuOpen, setMenuOpen] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const [showComments, setShowComments] = useState(false);
-  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState("");
   const { followState, followLabel, disabled: followDisabled, toggleFollow } = useHumanFollow({
     session,
     userId,
@@ -145,23 +142,6 @@ export function PostCard({ post, session, userId, myName, onOpenComplaint, onOpe
       setVoteError("Bugün zaten oy kullandın");
     } finally {
       setVoting(false);
-    }
-  };
-
-  const deletePost = async () => {
-    setConfirmDeleteOpen(false);
-    setDeleteError("");
-    setDeleting(true);
-    try {
-      // posts_delete RLS'i zaten "author_id = auth.uid()" - baskasinin
-      // gonderisi buraya kadar hic gelmez (menude de sadece post.isMine
-      // icin gosteriliyor). Ilgili post_pets/likes/comments/contest_votes
-      // satirlari FK ON DELETE CASCADE ile otomatik temizleniyor.
-      await supabaseDelete("posts", session.access_token, `id=eq.${post.id}`);
-      onPostDeleted && onPostDeleted(post.id);
-    } catch (e) {
-      setDeleteError(e.message);
-      setDeleting(false);
     }
   };
 
@@ -233,24 +213,13 @@ export function PostCard({ post, session, userId, myName, onOpenComplaint, onOpe
             {followLabel}
           </button>
         )}
-        <div style={{ position: "relative" }}>
-          <button onClick={() => setMenuOpen((v) => !v)} style={{ background: "none", border: "none", cursor: "pointer", color: C.inkSoft, fontSize: 18, padding: "0 4px" }}>
-            ⋯
-          </button>
-          {menuOpen && (
-            <div style={{ position: "absolute", right: 0, top: 26, background: C.cream, border: `1px solid ${C.line}`, borderRadius: 10, boxShadow: "0 6px 18px rgba(0,0,0,0.08)", zIndex: 10, minWidth: 150 }}>
-              {post.isMine ? (
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    setConfirmDeleteOpen(true);
-                  }}
-                  disabled={deleting}
-                  style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "10px 12px", background: "none", border: "none", cursor: deleting ? "default" : "pointer", fontFamily: FONT_BODY, fontSize: 13, color: C.coral, textAlign: "left", opacity: deleting ? 0.6 : 1 }}
-                >
-                  <X size={14} /> {deleting ? "Siliniyor..." : "Gönderiyi sil"}
-                </button>
-              ) : (
+        {!post.isMine && (
+          <div style={{ position: "relative" }}>
+            <button onClick={() => setMenuOpen((v) => !v)} style={{ background: "none", border: "none", cursor: "pointer", color: C.inkSoft, fontSize: 18, padding: "0 4px" }}>
+              ⋯
+            </button>
+            {menuOpen && (
+              <div style={{ position: "absolute", right: 0, top: 26, background: C.cream, border: `1px solid ${C.line}`, borderRadius: 10, boxShadow: "0 6px 18px rgba(0,0,0,0.08)", zIndex: 10, minWidth: 150 }}>
                 <button
                   onClick={() => {
                     setMenuOpen(false);
@@ -260,8 +229,6 @@ export function PostCard({ post, session, userId, myName, onOpenComplaint, onOpe
                 >
                   <Flag size={14} /> Şikayet et
                 </button>
-              )}
-              {!post.isMine && (
                 <button
                   onClick={async () => {
                     setMenuOpen(false);
@@ -274,10 +241,10 @@ export function PostCard({ post, session, userId, myName, onOpenComplaint, onOpe
                 >
                   <X size={14} /> Engelle
                 </button>
-              )}
-            </div>
-          )}
-        </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {post.imageUrl && (
@@ -325,7 +292,6 @@ export function PostCard({ post, session, userId, myName, onOpenComplaint, onOpe
         {voteError && (
           <div style={{ fontFamily: FONT_BODY, fontSize: 11.5, color: C.coral, marginBottom: 8 }}>{voteError}</div>
         )}
-        {deleteError && <ErrorBanner style={{ marginBottom: 8 }}>{deleteError}</ErrorBanner>}
         {post.imageUrl ? (
           <div style={{ fontFamily: FONT_BODY, fontSize: 13.5, color: C.ink, lineHeight: 1.4 }}>
             <span style={{ fontWeight: 800 }}>{petsLabel}</span> — {post.caption}
@@ -346,34 +312,6 @@ export function PostCard({ post, session, userId, myName, onOpenComplaint, onOpe
         />
       )}
 
-      {confirmDeleteOpen && (
-        <div
-          style={{ position: "fixed", inset: 0, background: "rgba(36,33,29,0.45)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 50 }}
-          onClick={() => setConfirmDeleteOpen(false)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{ background: C.paper, borderRadius: "22px 22px 0 0", padding: "20px 20px 28px", width: "100%", maxWidth: 480 }}
-          >
-            <div style={{ fontFamily: FONT_DISPLAY, fontSize: 17, color: C.ink, marginBottom: 8 }}>Gönderi silinsin mi?</div>
-            <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, marginBottom: 20, lineHeight: 1.5 }}>
-              Bu işlem geri alınamaz.
-            </div>
-            <button
-              onClick={deletePost}
-              style={{ width: "100%", marginBottom: 8, background: C.coral, color: C.cream, border: "none", borderRadius: 12, padding: "12px 14px", fontFamily: FONT_DISPLAY, fontSize: 13.5, cursor: "pointer" }}
-            >
-              Gönderiyi sil
-            </button>
-            <button
-              onClick={() => setConfirmDeleteOpen(false)}
-              style={{ width: "100%", background: "none", color: C.inkSoft, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: "12px 14px", fontFamily: FONT_DISPLAY, fontSize: 13.5, cursor: "pointer" }}
-            >
-              Vazgeç
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -483,7 +421,6 @@ export function FeedScreen({ session, userId, myName, onOpenComplaint, onOpenPro
             isGuest={isGuest}
             onRequireAuth={onRequireAuth}
             onStreakUpdate={setStreak}
-            onPostDeleted={(postId) => setPosts((cur) => cur.filter((x) => x.id !== postId))}
           />
         ))}
       </div>

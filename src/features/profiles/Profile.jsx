@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Lock, Globe, Plus, Camera, LogOut } from "lucide-react";
+import { Lock, Globe, Plus, Camera, LogOut, X } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
 import { TopBar, BlobAvatar, EmptyState, ErrorBanner } from "../../components/ui";
 import { FollowListModal } from "../../components/modals";
@@ -33,7 +33,31 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
   const [followListData, setFollowListData] = useState([]);
   const [followListLoading, setFollowListLoading] = useState(false);
   const [followListError, setFollowListError] = useState("");
+  const [postMenuOpenId, setPostMenuOpenId] = useState(null);
+  const [confirmDeletePostId, setConfirmDeletePostId] = useState(null);
+  const [deletingPostId, setDeletingPostId] = useState(null);
+  const [postDeleteError, setPostDeleteError] = useState("");
   const avatarInputRef = useRef(null);
+
+  const deletePost = async (postId) => {
+    setConfirmDeletePostId(null);
+    setPostDeleteError("");
+    setDeletingPostId(postId);
+    try {
+      // posts_delete RLS'i "author_id = auth.uid()" - bu ekrandaki tum
+      // gonderiler zaten benim (select sorgusu author_id=eq.${userId}
+      // ile sinirli), baska bir yetki gevsetmesi gerekmiyor. Ilgili
+      // post_pets/likes/comments/contest_votes satirlari FK ON DELETE
+      // CASCADE ile otomatik temizleniyor.
+      await supabaseDelete("posts", session.access_token, `id=eq.${postId}`);
+      setMyPosts((cur) => cur.filter((p) => p.id !== postId));
+      setCounts((c) => ({ ...c, posts: Math.max(0, c.posts - 1) }));
+    } catch (e) {
+      setPostDeleteError(e.message);
+    } finally {
+      setDeletingPostId(null);
+    }
+  };
 
   const openFollowList = (kind) => {
     setListOpen(kind);
@@ -435,38 +459,78 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
         )}
 
         <div style={{ fontFamily: FONT_DISPLAY, fontSize: 14, color: C.ink, margin: "22px 0 10px" }}>Gönderilerim</div>
+        {postDeleteError && <ErrorBanner style={{ marginBottom: 8 }}>{postDeleteError}</ErrorBanner>}
         {myPosts.length === 0 ? (
           <EmptyState padding="20px 0">Henüz gönderin yok.</EmptyState>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-            {myPosts.map((p) =>
-              p.image_url ? (
-                <div key={p.id} style={{ aspectRatio: "1 / 1", borderRadius: 12, overflow: "hidden" }}>
-                  <img src={p.image_url} alt={p.caption} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                </div>
-              ) : (
-                <div
-                  key={p.id}
+            {myPosts.map((p) => (
+              <div key={p.id} style={{ position: "relative" }}>
+                {p.image_url ? (
+                  <div style={{ aspectRatio: "1 / 1", borderRadius: 12, overflow: "hidden" }}>
+                    <img src={p.image_url} alt={p.caption} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      aspectRatio: "1 / 1",
+                      borderRadius: 12,
+                      background: C.cream,
+                      border: `1px solid ${C.line}`,
+                      padding: 8,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      textAlign: "center",
+                      fontFamily: FONT_BODY,
+                      fontSize: 11,
+                      color: C.inkSoft,
+                      overflow: "hidden",
+                    }}
+                  >
+                    {p.caption}
+                  </div>
+                )}
+                <button
+                  onClick={() => setPostMenuOpenId((cur) => (cur === p.id ? null : p.id))}
                   style={{
-                    aspectRatio: "1 / 1",
-                    borderRadius: 12,
-                    background: C.cream,
-                    border: `1px solid ${C.line}`,
-                    padding: 8,
+                    position: "absolute",
+                    top: 4,
+                    right: 4,
+                    width: 22,
+                    height: 22,
+                    borderRadius: "50%",
+                    background: "rgba(36,33,29,0.55)",
+                    color: "#fff",
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: 14,
+                    lineHeight: 1,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    textAlign: "center",
-                    fontFamily: FONT_BODY,
-                    fontSize: 11,
-                    color: C.inkSoft,
-                    overflow: "hidden",
                   }}
                 >
-                  {p.caption}
-                </div>
-              )
-            )}
+                  ⋯
+                </button>
+                {postMenuOpenId === p.id && (
+                  <div
+                    style={{ position: "absolute", top: 28, right: 4, background: C.cream, border: `1px solid ${C.line}`, borderRadius: 10, boxShadow: "0 6px 18px rgba(0,0,0,0.08)", zIndex: 10, minWidth: 140 }}
+                  >
+                    <button
+                      onClick={() => {
+                        setPostMenuOpenId(null);
+                        setConfirmDeletePostId(p.id);
+                      }}
+                      disabled={deletingPostId === p.id}
+                      style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "9px 11px", background: "none", border: "none", cursor: deletingPostId === p.id ? "default" : "pointer", fontFamily: FONT_BODY, fontSize: 12.5, color: C.coral, textAlign: "left", opacity: deletingPostId === p.id ? 0.6 : 1, whiteSpace: "nowrap" }}
+                    >
+                      <X size={13} /> {deletingPostId === p.id ? "Siliniyor..." : "Gönderiyi sil"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
 
@@ -530,6 +594,35 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
             </button>
             <button
               onClick={() => setConfirmUnblockId(null)}
+              style={{ width: "100%", background: "none", color: C.inkSoft, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: "12px 14px", fontFamily: FONT_DISPLAY, fontSize: 13.5, cursor: "pointer" }}
+            >
+              Vazgeç
+            </button>
+          </div>
+        </div>
+      )}
+
+      {confirmDeletePostId && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(36,33,29,0.45)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 50 }}
+          onClick={() => setConfirmDeletePostId(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: C.paper, borderRadius: "22px 22px 0 0", padding: "20px 20px 28px", width: "100%", maxWidth: 480 }}
+          >
+            <div style={{ fontFamily: FONT_DISPLAY, fontSize: 17, color: C.ink, marginBottom: 8 }}>Gönderi silinsin mi?</div>
+            <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, marginBottom: 20, lineHeight: 1.5 }}>
+              Bu işlem geri alınamaz.
+            </div>
+            <button
+              onClick={() => deletePost(confirmDeletePostId)}
+              style={{ width: "100%", marginBottom: 8, background: C.coral, color: C.cream, border: "none", borderRadius: 12, padding: "12px 14px", fontFamily: FONT_DISPLAY, fontSize: 13.5, cursor: "pointer" }}
+            >
+              Gönderiyi sil
+            </button>
+            <button
+              onClick={() => setConfirmDeletePostId(null)}
               style={{ width: "100%", background: "none", color: C.inkSoft, border: `1.5px solid ${C.line}`, borderRadius: 12, padding: "12px 14px", fontFamily: FONT_DISPLAY, fontSize: 13.5, cursor: "pointer" }}
             >
               Vazgeç

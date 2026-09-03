@@ -68,10 +68,6 @@ export function DiscoverScreen({ session, userId, myName, onOpenProfile, onOpenC
             onOpenProfile={onOpenProfile}
             isGuest={isGuest}
             onRequireAuth={onRequireAuth}
-            onPostDeleted={(postId) => {
-              setPosts((cur) => cur.filter((x) => x.id !== postId));
-              setOpenPost(null);
-            }}
           />
         </div>
       </div>
