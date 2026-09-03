@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Lock, Globe, Plus, Camera, LogOut, X, Heart, MessageCircle, Ban, ChevronRight } from "lucide-react";
+import { Lock, Globe, Plus, Camera, LogOut, X, Heart, MessageCircle, Ban, ChevronRight, User as UserIcon } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
-import { TopBar, BlobAvatar, EmptyState, ErrorBanner } from "../../components/ui";
+import { TopBar, BlobAvatar, EmptyState, ErrorBanner, TextField } from "../../components/ui";
 import { FollowListModal } from "../../components/modals";
 import { supabaseUpdate, supabaseCount, supabaseSelect, supabaseUploadImage, supabaseRpc, supabaseInsert, supabaseDelete } from "../../lib/supabase/client";
 import { fetchFollowList } from "./followList";
@@ -12,13 +12,22 @@ const PET_TYPES = [
   { key: "other", label: "Diğer", emoji: "🐾" },
 ];
 
-export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsPrivate, onOpenProfile, onLogout, onAddPet }) {
+export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsPrivate, onOpenProfile, onLogout, onAddPet, onUpdateUserName }) {
   const [listOpen, setListOpen] = useState(null);
   const [dmPolicy, setDmPolicy] = useState("everyone");
   const [counts, setCounts] = useState({ followers: 0, following: 0, posts: 0 });
   const [myPosts, setMyPosts] = useState([]);
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [handle, setHandle] = useState("");
+  const [bio, setBio] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editHandle, setEditHandle] = useState("");
+  const [editBio, setEditBio] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [editProfileError, setEditProfileError] = useState("");
   const [pendingRequests, setPendingRequests] = useState([]);
   const [requestError, setRequestError] = useState("");
   const [addingPetOpen, setAddingPetOpen] = useState(false);
@@ -179,10 +188,12 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
     loadMyPosts()
       .then(setMyPosts)
       .catch(() => {});
-    supabaseSelect("profiles", session?.access_token, `select=avatar_url,dm_policy&id=eq.${userId}`)
+    supabaseSelect("profiles", session?.access_token, `select=avatar_url,dm_policy,handle,bio&id=eq.${userId}`)
       .then((rows) => {
         setAvatarUrl(rows[0]?.avatar_url || null);
         if (rows[0]?.dm_policy) setDmPolicy(rows[0].dm_policy);
+        setHandle(rows[0]?.handle || "");
+        setBio(rows[0]?.bio || "");
       })
       .catch(() => {});
     // Hem insan (pet_id=null) hem pet takip istekleri - ayni RPC ile
@@ -235,6 +246,47 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
     }
   };
 
+  const openEditProfile = () => {
+    setEditName(user.name || "");
+    setEditHandle(handle || "");
+    setEditBio(bio || "");
+    setEditProfileError("");
+    setEditProfileOpen(true);
+  };
+
+  const saveProfile = async () => {
+    setEditProfileError("");
+    if (!editName.trim()) {
+      setEditProfileError("Ad boş olamaz.");
+      return;
+    }
+    if (editBio.length > 160) {
+      setEditProfileError("Biyografi en fazla 160 karakter olabilir.");
+      return;
+    }
+    setSavingProfile(true);
+    try {
+      // profiles_update RLS'i (auth.uid()=id) zaten sadece kendi
+      // profilimi guncellememe izin veriyor. handle icin tek kural
+      // veritabanindaki UNIQUE kisiti (profiles_handle_key) - format/
+      // rezerve kelime kontrolu roadmap'te henuz yok, o yuzden burada
+      // da eklenmedi; catch, cakisma hatasini oldugu gibi gosteriyor.
+      await supabaseUpdate("profiles", session.access_token, `id=eq.${userId}`, {
+        display_name: editName.trim(),
+        handle: editHandle.trim(),
+        bio: editBio.trim() || null,
+      });
+      onUpdateUserName && onUpdateUserName(editName.trim());
+      setHandle(editHandle.trim());
+      setBio(editBio.trim());
+      setEditProfileOpen(false);
+    } catch (e) {
+      setEditProfileError(e.message);
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
   const togglePrivate = async () => {
     const next = !isPrivate;
     setIsPrivate(next);
@@ -247,11 +299,18 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
 
   return (
     <div>
-      <TopBar title="Profilim" />
+      <TopBar
+        title="Profilim"
+        right={
+          <button onClick={() => setSettingsOpen(true)} style={{ background: "none", border: "none", cursor: "pointer", color: C.inkSoft, fontSize: 18, padding: "0 4px" }}>
+            ⋯
+          </button>
+        }
+      />
       <div style={{ padding: "20px 18px 90px", maxWidth: 480, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 20 }}>
           <input ref={avatarInputRef} type="file" accept="image/*" onChange={handleAvatarChange} style={{ display: "none" }} />
-          <div onClick={() => avatarInputRef.current?.click()} style={{ position: "relative", cursor: "pointer" }}>
+          <div onClick={() => avatarInputRef.current?.click()} style={{ position: "relative", cursor: "pointer", flexShrink: 0 }}>
             {avatarUrl ? (
               <img
                 src={avatarUrl}
@@ -279,9 +338,17 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
               <Camera size={11} color={C.cream} />
             </div>
           </div>
-          <div>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontFamily: FONT_DISPLAY, fontSize: 18, color: C.ink }}>{user.name || "Sen"}</div>
-            <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: C.inkSoft }}>
+            {handle && <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: C.inkSoft }}>{handle}</div>}
+            {bio ? (
+              <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.ink, lineHeight: 1.45, marginTop: 4, wordBreak: "break-word" }}>{bio}</div>
+            ) : (
+              <div onClick={openEditProfile} style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: C.inkSoft, opacity: 0.65, marginTop: 4, cursor: "pointer" }}>
+                Biyografi ekle
+              </div>
+            )}
+            <div style={{ fontFamily: FONT_BODY, fontSize: 12, color: C.inkSoft, marginTop: 4 }}>
               {uploadingAvatar ? "Fotoğraf yükleniyor..." : `${myPets.length} dost`}
             </div>
           </div>
@@ -416,69 +483,6 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: C.cream, border: `1px solid ${C.line}`, borderRadius: 14, padding: "14px 16px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {isPrivate ? <Lock size={18} color={C.pine} /> : <Globe size={18} color={C.mustard} />}
-            <div>
-              <div style={{ fontFamily: FONT_DISPLAY, fontSize: 13.5, color: C.ink }}>{isPrivate ? "Kapalı Profil" : "Açık Profil"}</div>
-              <div style={{ fontFamily: FONT_BODY, fontSize: 11.5, color: C.inkSoft }}>{isPrivate ? "Sadece takipçilerin görebilir" : "Herkes görebilir"}</div>
-            </div>
-          </div>
-          <button
-            onClick={togglePrivate}
-            style={{ width: 44, height: 26, borderRadius: 13, border: "none", background: isPrivate ? C.pine : C.line, position: "relative", cursor: "pointer" }}
-          >
-            <div style={{ width: 20, height: 20, borderRadius: "50%", background: C.cream, position: "absolute", top: 3, left: isPrivate ? 21 : 3, transition: "left 0.15s ease" }} />
-          </button>
-        </div>
-        <div style={{ fontFamily: FONT_BODY, fontSize: 11.5, color: C.inkSoft, marginTop: 8, lineHeight: 1.5, marginBottom: 20 }}>
-          Not: Yarışmaya girdiğin gönderiler, profil ayarından bağımsız olarak oy verilebilmesi için her zaman herkese açık olur.
-        </div>
-
-        <div style={{ fontFamily: FONT_DISPLAY, fontSize: 14, color: C.ink, marginBottom: 10 }}>Kimler mesaj atabilir?</div>
-        <div style={{ display: "flex", gap: 8 }}>
-          {[
-            { key: "everyone", label: "Herkes" },
-            { key: "followers", label: "Sadece Takipçiler" },
-          ].map((opt) => (
-            <button
-              key={opt.key}
-              onClick={() => changeDmPolicy(opt.key)}
-              style={{
-                flex: 1,
-                padding: "11px 8px",
-                borderRadius: 12,
-                border: `2px solid ${dmPolicy === opt.key ? C.mustard : C.line}`,
-                background: dmPolicy === opt.key ? "#FDF1D8" : C.cream,
-                fontFamily: FONT_BODY,
-                fontWeight: 700,
-                fontSize: 12.5,
-                color: C.ink,
-                cursor: "pointer",
-              }}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ fontFamily: FONT_DISPLAY, fontSize: 14, color: C.ink, margin: "22px 0 10px" }}>Ayarlar</div>
-        <div
-          onClick={() => setBlockedPanelOpen(true)}
-          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: C.cream, border: `1px solid ${C.line}`, borderRadius: 14, padding: "14px 16px", cursor: "pointer" }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Ban size={18} color={C.inkSoft} />
-            <div style={{ fontFamily: FONT_DISPLAY, fontSize: 13.5, color: C.ink }}>Engellenen Hesaplar</div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            {blockedUsers.length > 0 && (
-              <span style={{ fontFamily: FONT_BODY, fontSize: 12, color: C.inkSoft }}>{blockedUsers.length}</span>
-            )}
-            <ChevronRight size={18} color={C.inkSoft} />
-          </div>
-        </div>
-
         <div style={{ fontFamily: FONT_DISPLAY, fontSize: 14, color: C.ink, margin: "22px 0 10px" }}>Gönderilerim</div>
         {postDeleteError && <ErrorBanner style={{ marginBottom: 8 }}>{postDeleteError}</ErrorBanner>}
         {myPosts.length === 0 ? (
@@ -599,29 +603,6 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
             })}
           </div>
         )}
-
-        <button
-          onClick={onLogout}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-            width: "100%",
-            marginTop: 28,
-            padding: "12px 8px",
-            borderRadius: 12,
-            border: `1.5px solid ${C.line}`,
-            background: "none",
-            fontFamily: FONT_BODY,
-            fontWeight: 700,
-            fontSize: 13,
-            color: C.coral,
-            cursor: "pointer",
-          }}
-        >
-          <LogOut size={15} /> Çıkış yap
-        </button>
       </div>
       {listOpen && (
         <FollowListModal
@@ -635,6 +616,177 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
             onOpenProfile && onOpenProfile(u);
           }}
         />
+      )}
+
+      {settingsOpen && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(36,33,29,0.45)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 50 }}
+          onClick={() => setSettingsOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: C.paper, borderRadius: "22px 22px 0 0", padding: "18px 18px 24px", width: "100%", maxWidth: 480, maxHeight: "80vh", overflowY: "auto", boxSizing: "border-box" }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ fontFamily: FONT_DISPLAY, fontSize: 16, color: C.ink }}>Ayarlar</div>
+              <button onClick={() => setSettingsOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: C.inkSoft }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div
+              onClick={() => {
+                setSettingsOpen(false);
+                openEditProfile();
+              }}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: C.cream, border: `1px solid ${C.line}`, borderRadius: 14, padding: "14px 16px", marginBottom: 14, cursor: "pointer" }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <UserIcon size={18} color={C.inkSoft} />
+                <div style={{ fontFamily: FONT_DISPLAY, fontSize: 13.5, color: C.ink }}>Profili düzenle</div>
+              </div>
+              <ChevronRight size={18} color={C.inkSoft} />
+            </div>
+
+            <div style={{ fontFamily: FONT_DISPLAY, fontSize: 13, color: C.inkSoft, marginBottom: 8 }}>Profil Gizliliği</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: C.cream, border: `1px solid ${C.line}`, borderRadius: 14, padding: "14px 16px", marginBottom: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {isPrivate ? <Lock size={18} color={C.pine} /> : <Globe size={18} color={C.mustard} />}
+                <div>
+                  <div style={{ fontFamily: FONT_DISPLAY, fontSize: 13.5, color: C.ink }}>{isPrivate ? "Kapalı Profil" : "Açık Profil"}</div>
+                  <div style={{ fontFamily: FONT_BODY, fontSize: 11.5, color: C.inkSoft }}>{isPrivate ? "Sadece takipçilerin görebilir" : "Herkes görebilir"}</div>
+                </div>
+              </div>
+              <button
+                onClick={togglePrivate}
+                style={{ width: 44, height: 26, borderRadius: 13, border: "none", background: isPrivate ? C.pine : C.line, position: "relative", cursor: "pointer" }}
+              >
+                <div style={{ width: 20, height: 20, borderRadius: "50%", background: C.cream, position: "absolute", top: 3, left: isPrivate ? 21 : 3, transition: "left 0.15s ease" }} />
+              </button>
+            </div>
+            <div style={{ fontFamily: FONT_BODY, fontSize: 11.5, color: C.inkSoft, marginBottom: 18, lineHeight: 1.5 }}>
+              Not: Yarışmaya girdiğin gönderiler, profil ayarından bağımsız olarak oy verilebilmesi için her zaman herkese açık olur.
+            </div>
+
+            <div style={{ fontFamily: FONT_DISPLAY, fontSize: 13, color: C.inkSoft, marginBottom: 8 }}>Mesaj İzinleri</div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+              {[
+                { key: "everyone", label: "Herkes" },
+                { key: "followers", label: "Sadece Takipçiler" },
+              ].map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => changeDmPolicy(opt.key)}
+                  style={{
+                    flex: 1,
+                    padding: "11px 8px",
+                    borderRadius: 12,
+                    border: `2px solid ${dmPolicy === opt.key ? C.mustard : C.line}`,
+                    background: dmPolicy === opt.key ? "#FDF1D8" : C.cream,
+                    fontFamily: FONT_BODY,
+                    fontWeight: 700,
+                    fontSize: 12.5,
+                    color: C.ink,
+                    cursor: "pointer",
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            <div
+              onClick={() => setBlockedPanelOpen(true)}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: C.cream, border: `1px solid ${C.line}`, borderRadius: 14, padding: "14px 16px", marginBottom: 18, cursor: "pointer" }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <Ban size={18} color={C.inkSoft} />
+                <div style={{ fontFamily: FONT_DISPLAY, fontSize: 13.5, color: C.ink }}>Engellenen Hesaplar</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {blockedUsers.length > 0 && (
+                  <span style={{ fontFamily: FONT_BODY, fontSize: 12, color: C.inkSoft }}>{blockedUsers.length}</span>
+                )}
+                <ChevronRight size={18} color={C.inkSoft} />
+              </div>
+            </div>
+
+            <button
+              onClick={onLogout}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                width: "100%",
+                padding: "12px 8px",
+                borderRadius: 12,
+                border: `1.5px solid ${C.line}`,
+                background: "none",
+                fontFamily: FONT_BODY,
+                fontWeight: 700,
+                fontSize: 13,
+                color: C.coral,
+                cursor: "pointer",
+              }}
+            >
+              <LogOut size={15} /> Çıkış yap
+            </button>
+          </div>
+        </div>
+      )}
+
+      {editProfileOpen && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(36,33,29,0.45)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 55 }}
+          onClick={() => setEditProfileOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: C.paper, borderRadius: "22px 22px 0 0", padding: "18px 18px 24px", width: "100%", maxWidth: 480, maxHeight: "85vh", overflowY: "auto", boxSizing: "border-box" }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ fontFamily: FONT_DISPLAY, fontSize: 16, color: C.ink }}>Profili düzenle</div>
+              <button onClick={() => setEditProfileOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: C.inkSoft }}>
+                <X size={20} />
+              </button>
+            </div>
+            {editProfileError && <ErrorBanner style={{ marginBottom: 12 }}>{editProfileError}</ErrorBanner>}
+            <TextField label="Görünen ad" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Adın Soyadın" />
+            <TextField label="Kullanıcı adı" value={editHandle} onChange={(e) => setEditHandle(e.target.value)} placeholder="@kullaniciadi" />
+            <label style={{ display: "block", marginBottom: 16 }}>
+              <span style={{ fontFamily: FONT_BODY, fontSize: 13, fontWeight: 700, color: C.inkSoft }}>Biyografi</span>
+              <textarea
+                value={editBio}
+                onChange={(e) => setEditBio(e.target.value.slice(0, 160))}
+                placeholder="Kendinden ve dostlarından kısaca bahset..."
+                rows={3}
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  marginTop: 6,
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: `2px solid ${C.line}`,
+                  fontFamily: FONT_BODY,
+                  fontSize: 14,
+                  color: C.ink,
+                  background: C.cream,
+                  outline: "none",
+                  resize: "none",
+                }}
+              />
+              <div style={{ textAlign: "right", fontFamily: FONT_BODY, fontSize: 11, color: C.inkSoft, marginTop: 4 }}>{editBio.length}/160</div>
+            </label>
+            <button
+              onClick={saveProfile}
+              disabled={savingProfile}
+              style={{ width: "100%", background: C.pine, color: C.cream, border: "none", borderRadius: 12, padding: "12px 14px", fontFamily: FONT_DISPLAY, fontSize: 13.5, cursor: savingProfile ? "default" : "pointer", opacity: savingProfile ? 0.6 : 1 }}
+            >
+              {savingProfile ? "Kaydediliyor..." : "Kaydet"}
+            </button>
+          </div>
+        </div>
       )}
 
       {blockedPanelOpen && (

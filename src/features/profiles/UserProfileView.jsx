@@ -64,6 +64,9 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
   const [followListData, setFollowListData] = useState([]);
   const [followListLoading, setFollowListLoading] = useState(false);
   const [followListError, setFollowListError] = useState("");
+  // target prop'u (post/arama sonucundan gelen) eski/eksik olabilir -
+  // ad/kullanici adi/biyografi icin profiles'tan taze veri cekiliyor.
+  const [profile, setProfile] = useState(null);
   const { followState, followLabel, isSelf, disabled, toggleFollow } = useHumanFollow({
     session,
     userId,
@@ -105,8 +108,14 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
     supabaseSelect("pets", session?.access_token, `select=id,name,emoji&owner_id=eq.${target.authorId}`)
       .then(setPets)
       .catch(() => {});
+    supabaseSelect("profiles", session?.access_token, `select=display_name,handle,bio,avatar_url&id=eq.${target.authorId}`)
+      .then((rows) => setProfile(rows[0] || null))
+      .catch(() => {});
     refreshBlockState();
   }, [target.authorId, userId]);
+
+  const displayName = profile?.display_name || target.human;
+  const displayHandle = profile?.handle || target.handle || "";
 
   const openFollowList = (kind) => {
     setListOpen(kind);
@@ -159,11 +168,11 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
   if (blockedEitherWay) {
     return (
       <div>
-        <TopBar title={target.human} onBack={onBack} />
+        <TopBar title={displayName} onBack={onBack} />
         <div style={{ padding: "40px 24px", textAlign: "center", maxWidth: 480, margin: "0 auto" }}>
           <div style={{ fontFamily: FONT_BODY, fontSize: 13.5, color: C.inkSoft, marginBottom: 18, lineHeight: 1.5 }}>
             {iBlockedThem
-              ? `${target.human} adlı kullanıcıyı engelledin. Birbirinizi takip edemez, istek gönderemezsiniz.`
+              ? `${displayName} adlı kullanıcıyı engelledin. Birbirinizi takip edemez, istek gönderemezsiniz.`
               : "Bu profil şu anda görüntülenemiyor."}
           </div>
           {blockError && <ErrorBanner style={{ marginBottom: 12 }}>{blockError}</ErrorBanner>}
@@ -194,7 +203,7 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
   return (
     <div>
       <TopBar
-        title={target.human}
+        title={displayName}
         onBack={onBack}
         right={
           !isSelf && (
@@ -222,11 +231,18 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
       />
       <div style={{ padding: "20px 18px 40px", maxWidth: 480, margin: "0 auto" }}>
         {blockError && <ErrorBanner style={{ marginBottom: 14 }}>{blockError}</ErrorBanner>}
-        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
-          <BlobAvatar emoji={target.petEmoji} size={64} color={C.mustard} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: FONT_DISPLAY, fontSize: 18, color: C.ink }}>{target.human}</div>
-            <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: C.inkSoft }}>{target.handle || ""}</div>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 18 }}>
+          {profile?.avatar_url ? (
+            <img src={profile.avatar_url} alt="" style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+          ) : (
+            <BlobAvatar emoji={target.petEmoji} size={64} color={C.mustard} />
+          )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: FONT_DISPLAY, fontSize: 18, color: C.ink }}>{displayName}</div>
+            {displayHandle && <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: C.inkSoft }}>{displayHandle}</div>}
+            {profile?.bio && (
+              <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.ink, lineHeight: 1.45, marginTop: 4, wordBreak: "break-word" }}>{profile.bio}</div>
+            )}
           </div>
         </div>
 
@@ -257,8 +273,8 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
                 ? onRequireAuth()
                 : onOpenChat({
                     targetId: target.authorId,
-                    handle: target.handle,
-                    human: target.human,
+                    handle: displayHandle,
+                    human: displayName,
                     petEmoji: target.petEmoji,
                     color: C.mustard,
                   })
@@ -313,7 +329,7 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
             onClick={(e) => e.stopPropagation()}
             style={{ background: C.paper, borderRadius: "22px 22px 0 0", padding: "20px 20px 28px", width: "100%", maxWidth: 480 }}
           >
-            <div style={{ fontFamily: FONT_DISPLAY, fontSize: 17, color: C.ink, marginBottom: 8 }}>{target.human} engellensin mi?</div>
+            <div style={{ fontFamily: FONT_DISPLAY, fontSize: 17, color: C.ink, marginBottom: 8 }}>{displayName} engellensin mi?</div>
             <div style={{ fontFamily: FONT_BODY, fontSize: 13, color: C.inkSoft, marginBottom: 20, lineHeight: 1.5 }}>
               Birbirinizi bir daha takip edemez, takip isteği gönderemezsiniz. Mevcut takip/istek bağlantılarınız (izin verdiğimiz ölçüde) temizlenir.
             </div>

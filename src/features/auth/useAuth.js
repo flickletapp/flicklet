@@ -95,6 +95,10 @@ export function useAuth() {
     setMyPets((cur) => [...cur, pet]);
   };
 
+  const updateUserName = (name) => {
+    setUser({ name });
+  };
+
   return {
     phase,
     session,
@@ -110,5 +114,6 @@ export function useAuth() {
     completeOnboarding,
     goToSignup,
     addPet,
+    updateUserName,
   };
 }

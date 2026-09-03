@@ -96,6 +96,7 @@ export default function FlickletApp() {
               onOpenProfile={(p) => setViewingProfile(p)}
               onLogout={handleLogout}
               onAddPet={auth.addPet}
+              onUpdateUserName={auth.updateUserName}
             />
           )}
           <NavBar tab={tab} setTab={setTab} isGuest={isGuest} onRequireAuth={requireAuth} onAdd={() => setCreating(true)} />
