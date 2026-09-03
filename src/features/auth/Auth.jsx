@@ -1,7 +1,13 @@
 import { useState } from "react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
 import { TextField, PrimaryButton, ErrorBanner } from "../../components/ui";
-import { supabaseSignUp, supabaseSignInWithIdentifier } from "../../lib/supabase/client";
+import {
+  supabaseSignUp,
+  supabaseSignInWithIdentifier,
+  LOGIN_GENERIC_ERROR,
+  LOGIN_RATE_LIMITED,
+  LOGIN_USERNAME_UNAVAILABLE,
+} from "../../lib/supabase/client";
 
 export function AuthScreen({ onDone, onGuest }) {
   const [mode, setMode] = useState("login"); // login | signup | verify
@@ -40,7 +46,17 @@ export function AuthScreen({ onDone, onGuest }) {
       const data = await supabaseSignInWithIdentifier(identifier, pw);
       onDone(data);
     } catch (e) {
-      setError("Kullanıcı adı/e-posta veya şifre hatalı, ya da hesap henüz doğrulanmadı.");
+      // Hatali bilgi durumunda TEK ve genel mesaj - hesap var/yok
+      // ayrimi yapilmaz. Sadece "cok fazla deneme" ve "kullanici adiyla
+      // giris su an kapali" ayri ele alinir; bunlar kimlik bilgisi
+      // sizdirmayan, kullaniciya gercekten yardimci durumlar.
+      if (e?.code === LOGIN_RATE_LIMITED) {
+        setError("Çok fazla deneme yapıldı. Lütfen birkaç dakika sonra tekrar dene.");
+      } else if (e?.code === LOGIN_USERNAME_UNAVAILABLE) {
+        setError("Kullanıcı adıyla giriş şu an kullanılamıyor. Lütfen e-posta adresinle giriş yap.");
+      } else {
+        setError(LOGIN_GENERIC_ERROR);
+      }
     } finally {
       setLoading(false);
     }

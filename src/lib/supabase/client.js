@@ -38,26 +38,59 @@ export async function supabaseSignIn(email, password) {
 
 const EMAIL_SHAPE_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Kullanici adi VEYA e-posta ile giris. E-posta gibi görünüyorsa
-// dogrudan mevcut GoTrue akisi kullanilir (davranis degismedi). Aksi
-// halde, e-postayi asla istemciye/tarayici konsoluna sizdirmadan cozmek
-// icin sifreyi de dogrulayan guvenli bir RPC'ye (public.login_resolve_email,
-// bkz. 008_login_resolve_email migration) basvurulur - bu RPC, dogru
-// sifreyi bilmeyen biri icin e-postayi asla acmaz, o yuzden acik bir
-// "kullanici adi -> e-posta" arama motoru degildir.
+// Cagiranin ayirt edebilmesi icin ozel hata tipleri. Mesajlar tek ve
+// genel tutulur; hesap var/yok ayrimi yapilmaz.
+export const LOGIN_GENERIC_ERROR = "Kullanıcı adı/e-posta veya şifre hatalı.";
+export const LOGIN_RATE_LIMITED = "rate_limited";
+export const LOGIN_USERNAME_UNAVAILABLE = "username_unavailable";
+
+// Kullanici adi VEYA e-posta ile giris.
+//
+// - E-posta girildiyse: dogrudan Supabase Auth (signInWithPassword
+//   esdegeri) kullanilir - bu yol hic degismedi.
+// - Kullanici adi girildiyse: istek, SUNUCU TARAFI /api/login katmanina
+//   gider (bkz. api/login.js). Sifre hicbir zaman bir veritabani
+//   RPC'sine gonderilmez; dogrulama her zaman Supabase Auth'ta yapilir.
+//   Sunucu, kullanici adi -> hesap eslemesini service-role anahtariyla
+//   yalnizca kendi tarafinda cozer ve istemciye yalnizca normal Auth
+//   oturum yanitini doner (e-posta ayrica dondurulmez).
 export async function supabaseSignInWithIdentifier(identifier, password) {
   const trimmed = (identifier || "").trim();
   if (EMAIL_SHAPE_RE.test(trimmed)) {
     return supabaseSignIn(trimmed, password);
   }
-  const resolvedEmail = await supabaseRpc("login_resolve_email", SUPABASE_KEY, {
-    p_identifier: trimmed,
-    p_password: password,
-  }).catch(() => null);
-  if (!resolvedEmail) {
-    throw new Error("Kullanıcı adı/e-posta veya şifre hatalı, ya da hesap henüz doğrulanmadı.");
+
+  let res;
+  try {
+    res = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: trimmed, password }),
+    });
+  } catch (e) {
+    throw new Error(LOGIN_GENERIC_ERROR);
   }
-  return supabaseSignIn(resolvedEmail, password);
+
+  if (res.status === 429) {
+    const err = new Error(LOGIN_RATE_LIMITED);
+    err.code = LOGIN_RATE_LIMITED;
+    err.retryAfter = res.headers.get("retry-after");
+    throw err;
+  }
+  if (res.status === 503) {
+    const err = new Error(LOGIN_USERNAME_UNAVAILABLE);
+    err.code = LOGIN_USERNAME_UNAVAILABLE;
+    throw err;
+  }
+  if (!res.ok) {
+    throw new Error(LOGIN_GENERIC_ERROR);
+  }
+
+  const session = await res.json().catch(() => null);
+  if (!session?.access_token) {
+    throw new Error(LOGIN_GENERIC_ERROR);
+  }
+  return session;
 }
 
 export async function supabaseFetchTable(path, accessToken) {

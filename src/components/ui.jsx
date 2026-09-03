@@ -259,7 +259,14 @@ export function DesktopSideNav({ tab, setTab, isGuest, onRequireAuth, onAdd }) {
   ];
   return (
     <nav className="fl-sidenav">
-      <div style={{ padding: "6px 14px 22px" }}>
+      {/* Amblem konumu: ust cubuga yapismamasi icin ustte nefes alani,
+          "Akis" satiriyla arasinda dengeli bosluk. Yatayda hesap, PNG'nin
+          seffaf tuvaline gore degil GORUNEN sekle gore yapiliyor: dosyada
+          her yonde ~%8 seffaf pay var, yani 52 px'te gorunen amblem
+          kenardan ~4 px iceride basliyor. Bu yuzden padding-left, o 4 px
+          dusulerek secildi (gorunen sol kenar nav ikonlarindan ~10 px
+          saga gelsin diye). Boyut (52x52) ve dosya degismedi. */}
+      <div style={{ padding: "22px 14px 26px 20px" }}>
         <img src="/flicklet-mark.png" alt="Flicklet" style={{ width: 52, height: 52, display: "block" }} />
       </div>
       {items.map((it) => {
