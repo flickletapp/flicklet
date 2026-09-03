@@ -260,10 +260,18 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
       setEditProfileError("Ad boş olamaz.");
       return;
     }
+    if (!editHandle.trim()) {
+      setEditProfileError("Kullanıcı adı boş olamaz.");
+      return;
+    }
     if (editBio.length > 160) {
       setEditProfileError("Biyografi en fazla 160 karakter olabilir.");
       return;
     }
+    // Biyografi ZORUNLU DEGIL: bos veya sadece bosluk icin trim() sonrasi
+    // null gonderiliyor (profiles.bio nullable, bkz. 007_profiles_bio).
+    // Ad ve kullanici adi bunun disinda, yukarida ayrica zorunlu tutuluyor.
+    const trimmedBio = editBio.trim() ? editBio.trim() : null;
     setSavingProfile(true);
     try {
       // profiles_update RLS'i (auth.uid()=id) zaten sadece kendi
@@ -274,11 +282,11 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
       await supabaseUpdate("profiles", session.access_token, `id=eq.${userId}`, {
         display_name: editName.trim(),
         handle: editHandle.trim(),
-        bio: editBio.trim() || null,
+        bio: trimmedBio,
       });
       onUpdateUserName && onUpdateUserName(editName.trim());
       setHandle(editHandle.trim());
-      setBio(editBio.trim());
+      setBio(trimmedBio || "");
       setEditProfileOpen(false);
     } catch (e) {
       setEditProfileError(e.message);
