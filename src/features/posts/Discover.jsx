@@ -58,7 +58,7 @@ export function DiscoverScreen({ session, userId, myName, onOpenProfile, onOpenC
     return (
       <div>
         <TopBar title={openPost.pet} onBack={() => setOpenPost(null)} />
-        <div style={{ padding: "16px 14px 40px", maxWidth: 480, margin: "0 auto" }}>
+        <div className="fl-col" style={{ padding: "16px 14px 40px" }}>
           <PostCard
             post={openPost}
             session={session}
@@ -77,7 +77,7 @@ export function DiscoverScreen({ session, userId, myName, onOpenProfile, onOpenC
   return (
     <div>
       <TopBar title="Keşfet" />
-      <div style={{ padding: "12px 14px 0", maxWidth: 480, margin: "0 auto" }}>
+      <div className="fl-col" style={{ padding: "12px 14px 0" }}>
         <div style={{ position: "relative", marginBottom: 12 }}>
           <SearchIcon size={16} color={C.inkSoft} style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)" }} />
           <input
@@ -114,7 +114,7 @@ export function DiscoverScreen({ session, userId, myName, onOpenProfile, onOpenC
       </div>
 
       {profileQuery.trim() ? (
-        <div style={{ padding: "0 14px 90px", maxWidth: 480, margin: "0 auto" }}>
+        <div className="fl-col" style={{ padding: "0 14px 90px" }}>
           {searchingProfiles && <EmptyState>Aranıyor...</EmptyState>}
           {!searchingProfiles && profileResults.length === 0 && <EmptyState>"{profileQuery}" ile eşleşen kimse bulunamadı.</EmptyState>}
           {profileResults.map((u) => (
@@ -131,7 +131,7 @@ export function DiscoverScreen({ session, userId, myName, onOpenProfile, onOpenC
         <>
           {loading && <LoadingState />}
 
-          <div style={{ padding: "0 10px 90px", maxWidth: 480, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+          <div className="fl-col" style={{ padding: "0 10px 90px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
             {shown.map((p) => (
               <div
                 key={p.id}

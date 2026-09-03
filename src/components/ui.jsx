@@ -1,5 +1,6 @@
 import { ChevronLeft, Home, Compass, Plus, Trophy, User } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../theme";
+import { TRENDING } from "../mockData";
 
 // Ekranlarda tekrarlanan yükleniyor/boş/hata durumları için ortak bileşenler.
 export function LoadingState({ padding = "30px 0" }) {
@@ -170,6 +171,7 @@ export function NavBar({ tab, setTab, isGuest, onRequireAuth, onAdd }) {
   ];
   return (
     <div
+      className="fl-navbar"
       style={{
         position: "fixed",
         bottom: 0,
@@ -179,8 +181,6 @@ export function NavBar({ tab, setTab, isGuest, onRequireAuth, onAdd }) {
         borderTop: `1px solid ${C.line}`,
         display: "flex",
         padding: "10px 8px 14px",
-        maxWidth: 480,
-        margin: "0 auto",
       }}
     >
       {items.map((it) => {
@@ -231,6 +231,96 @@ export function NavBar({ tab, setTab, isGuest, onRequireAuth, onAdd }) {
           </button>
         );
       })}
+    </div>
+  );
+}
+
+// Genis ekranda (>=1024px) alt navigasyonun yerini alan sabit sol dikey menu.
+// Sekme/guest/ekle mantigi NavBar ile birebir ayni, sadece yerlesim dikey.
+export function DesktopSideNav({ tab, setTab, isGuest, onRequireAuth, onAdd }) {
+  const items = [
+    { key: "feed", label: "Akış", icon: Home },
+    { key: "discover", label: "Keşfet", icon: Compass },
+    { key: "add", label: "Ekle", icon: Plus },
+    { key: "contest", label: "Yarışma", icon: Trophy },
+    { key: "profile", label: "Profil", icon: User },
+  ];
+  return (
+    <nav className="fl-sidenav">
+      <div style={{ fontFamily: FONT_DISPLAY, fontSize: 21, color: C.pine, padding: "6px 14px 22px" }}>Flicklet</div>
+      {items.map((it) => {
+        const Icon = it.icon;
+        const active = tab === it.key;
+        const guestGated = isGuest && (it.key === "add" || it.key === "profile");
+        return (
+          <button
+            key={it.key}
+            onClick={() => {
+              if (guestGated) return onRequireAuth();
+              if (it.key === "add") return onAdd();
+              setTab(it.key);
+            }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              padding: "12px 14px",
+              borderRadius: 14,
+              border: "none",
+              background: active ? "#FDF1D8" : "transparent",
+              color: active ? C.mustard : C.ink,
+              fontFamily: FONT_DISPLAY,
+              fontSize: 15,
+              fontWeight: active ? 600 : 500,
+              cursor: "pointer",
+              textAlign: "left",
+              width: "100%",
+            }}
+          >
+            <Icon size={21} strokeWidth={active ? 2.4 : 2} />
+            {it.label}
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+// "Gündemde" bloğu — mobil/tablette Feed üstünde yatay şerit, masaüstünde
+// sağ sütunda dikey liste olarak yeniden konumlanır. Veri kaynağı aynı
+// (mevcut TRENDING), yeni/sahte içerik eklenmedi.
+export function TrendingSection({ layout = "horizontal" }) {
+  if (layout === "vertical") {
+    return (
+      <div style={{ background: C.cream, border: `1px solid ${C.line}`, borderRadius: 18, padding: "16px 14px" }}>
+        <div style={{ fontFamily: FONT_DISPLAY, fontSize: 13, color: C.inkSoft, marginBottom: 10, display: "flex", alignItems: "center", gap: 5 }}>
+          🔥 Gündemde
+        </div>
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {TRENDING.map((t) => (
+            <div
+              key={t.tag}
+              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 2px", borderBottom: `1px solid ${C.line}` }}
+            >
+              <span style={{ fontFamily: FONT_DISPLAY, fontSize: 13, color: C.ink }}>{t.tag}</span>
+              <span style={{ fontFamily: FONT_BODY, fontSize: 11, color: C.inkSoft }}>{t.count} flick</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 10 }}>
+      {TRENDING.map((t) => (
+        <div
+          key={t.tag}
+          style={{ whiteSpace: "nowrap", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1, padding: "8px 13px", borderRadius: 13, border: `2px solid ${C.line}`, background: C.cream, minWidth: 96 }}
+        >
+          <span style={{ fontFamily: FONT_DISPLAY, fontSize: 12.5, color: C.ink }}>{t.tag}</span>
+          <span style={{ fontFamily: FONT_BODY, fontSize: 10.5, color: C.inkSoft }}>{t.count} flick</span>
+        </div>
+      ))}
     </div>
   );
 }

@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { Heart, MessageCircle, Trophy, Flag, X, Search, Mail, Flame, Plus } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
-import { TopBar, BlobAvatar, PawBadge, LoadingState, EmptyState, ErrorBanner } from "../../components/ui";
+import { TopBar, BlobAvatar, PawBadge, LoadingState, EmptyState, ErrorBanner, TrendingSection } from "../../components/ui";
 import { CommentsModal } from "../../components/modals";
-import { TRENDING } from "../../mockData";
 import { supabaseSelect, supabaseInsert, supabaseUpsert, supabaseDelete, supabaseCount, supabaseRpc } from "../../lib/supabase/client";
 import { useHumanFollow } from "../profiles/useHumanFollow";
 
@@ -369,19 +368,12 @@ export function FeedScreen({ session, userId, myName, onOpenComplaint, onOpenPro
         }
       />
 
-      <div style={{ padding: "14px 14px 4px", maxWidth: 480, margin: "0 auto" }}>
+      <div className="fl-col fl-hide-desktop" style={{ padding: "14px 14px 4px" }}>
         <div style={{ fontFamily: FONT_DISPLAY, fontSize: 12.5, color: C.inkSoft, marginBottom: 8, display: "flex", alignItems: "center", gap: 5 }}>🔥 Gündemde</div>
-        <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 10 }}>
-          {TRENDING.map((t) => (
-            <div key={t.tag} style={{ whiteSpace: "nowrap", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1, padding: "8px 13px", borderRadius: 13, border: `2px solid ${C.line}`, background: C.cream, minWidth: 96 }}>
-              <span style={{ fontFamily: FONT_DISPLAY, fontSize: 12.5, color: C.ink }}>{t.tag}</span>
-              <span style={{ fontFamily: FONT_BODY, fontSize: 10.5, color: C.inkSoft }}>{t.count} flick</span>
-            </div>
-          ))}
-        </div>
+        <TrendingSection layout="horizontal" />
       </div>
 
-      <div style={{ padding: "0 14px", maxWidth: 480, margin: "0 auto" }}>
+      <div className="fl-col" style={{ padding: "0 14px" }}>
         <div
           onClick={() => (isGuest ? onRequireAuth() : onCompose())}
           style={{ display: "flex", alignItems: "center", gap: 10, background: C.cream, border: `1px solid ${C.line}`, borderRadius: 16, padding: "10px 12px", marginBottom: 6, cursor: "pointer" }}
@@ -397,15 +389,17 @@ export function FeedScreen({ session, userId, myName, onOpenComplaint, onOpenPro
       </div>
 
       {isGuest && (
-        <div
-          onClick={onRequireAuth}
-          style={{ margin: "4px 14px 0", maxWidth: 480 - 28, marginLeft: "auto", marginRight: "auto", background: C.mustard, color: C.cream, borderRadius: 14, padding: "11px 14px", fontFamily: FONT_BODY, fontSize: 12.5, fontWeight: 700, cursor: "pointer", textAlign: "center" }}
-        >
-          👀 Şu an gözatıyorsun — beğenmek, oy vermek ve paylaşmak için üye ol
+        <div className="fl-col" style={{ padding: "0 14px" }}>
+          <div
+            onClick={onRequireAuth}
+            style={{ margin: "4px 0 0", background: C.mustard, color: C.cream, borderRadius: 14, padding: "11px 14px", fontFamily: FONT_BODY, fontSize: 12.5, fontWeight: 700, cursor: "pointer", textAlign: "center" }}
+          >
+            👀 Şu an gözatıyorsun — beğenmek, oy vermek ve paylaşmak için üye ol
+          </div>
         </div>
       )}
 
-      <div style={{ padding: "16px 14px 90px", maxWidth: 480, margin: "0 auto" }}>
+      <div className="fl-col" style={{ padding: "16px 14px 90px" }}>
         {loading && <LoadingState />}
         {!loading && error && <ErrorBanner style={{ padding: "12px 14px" }}>{error}</ErrorBanner>}
         {!loading && !error && posts.length === 0 && <EmptyState>Henüz gönderi yok — ilk flick'i sen at 🐾</EmptyState>}

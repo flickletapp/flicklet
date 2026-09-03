@@ -51,7 +51,7 @@ export function ChatScreen({ conversation, session, userId, onBack }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
       <TopBar title={conversation.human} onBack={onBack} right={<BlobAvatar emoji={conversation.petEmoji} size={30} color={conversation.color} />} />
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px 14px", maxWidth: 480, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
+      <div className="fl-col" style={{ flex: 1, overflowY: "auto", padding: "16px 14px", boxSizing: "border-box" }}>
         {loading && <LoadingState padding="20px 0" />}
         {!loading && messages.length === 0 && <EmptyState padding="20px 0">Henüz mesaj yok, ilk mesajı sen yaz.</EmptyState>}
         {messages.map((m) => (
@@ -75,11 +75,11 @@ export function ChatScreen({ conversation, session, userId, onBack }) {
         ))}
       </div>
       {error && (
-        <div style={{ padding: "0 14px 8px", maxWidth: 480, margin: "0 auto", width: "100%", boxSizing: "border-box", fontFamily: FONT_BODY, fontSize: 12, color: C.coral }}>
+        <div className="fl-col" style={{ padding: "0 14px 8px", boxSizing: "border-box", fontFamily: FONT_BODY, fontSize: 12, color: C.coral }}>
           {error}
         </div>
       )}
-      <div style={{ display: "flex", gap: 8, padding: "10px 14px 18px", borderTop: `1px solid ${C.line}`, maxWidth: 480, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
+      <div className="fl-col" style={{ display: "flex", gap: 8, padding: "10px 14px 18px", borderTop: `1px solid ${C.line}`, boxSizing: "border-box" }}>
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}

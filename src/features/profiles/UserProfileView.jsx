@@ -169,7 +169,7 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
     return (
       <div>
         <TopBar title={displayName} onBack={onBack} />
-        <div style={{ padding: "40px 24px", textAlign: "center", maxWidth: 480, margin: "0 auto" }}>
+        <div className="fl-col" style={{ padding: "40px 24px", textAlign: "center" }}>
           <div style={{ fontFamily: FONT_BODY, fontSize: 13.5, color: C.inkSoft, marginBottom: 18, lineHeight: 1.5 }}>
             {iBlockedThem
               ? `${displayName} adlı kullanıcıyı engelledin. Birbirinizi takip edemez, istek gönderemezsiniz.`
@@ -229,7 +229,7 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
           )
         }
       />
-      <div style={{ padding: "20px 18px 40px", maxWidth: 480, margin: "0 auto" }}>
+      <div className="fl-col" style={{ padding: "20px 18px 40px" }}>
         {blockError && <ErrorBanner style={{ marginBottom: 14 }}>{blockError}</ErrorBanner>}
         <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 18 }}>
           {profile?.avatar_url ? (

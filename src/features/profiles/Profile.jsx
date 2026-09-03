@@ -307,7 +307,7 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
           </button>
         }
       />
-      <div style={{ padding: "20px 18px 90px", maxWidth: 480, margin: "0 auto" }}>
+      <div className="fl-col" style={{ padding: "20px 18px 90px" }}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 20 }}>
           <input ref={avatarInputRef} type="file" accept="image/*" onChange={handleAvatarChange} style={{ display: "none" }} />
           <div onClick={() => avatarInputRef.current?.click()} style={{ position: "relative", cursor: "pointer", flexShrink: 0 }}>

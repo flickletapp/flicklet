@@ -104,7 +104,7 @@ export function ContestScreen({ session, userId, isGuest, onRequireAuth }) {
   return (
     <div>
       <TopBar title="Yarışma" />
-      <div style={{ padding: "14px 14px 0", maxWidth: 480, margin: "0 auto" }}>
+      <div className="fl-col" style={{ padding: "14px 14px 0" }}>
         <div style={{ display: "flex", gap: 8, marginBottom: 16, background: C.cream, borderRadius: 13, padding: 4, border: `1px solid ${C.line}` }}>
           {[
             { key: "leaderboard", label: "Bu Ay" },
@@ -132,7 +132,7 @@ export function ContestScreen({ session, userId, isGuest, onRequireAuth }) {
       </div>
 
       {view === "leaderboard" && (
-        <div style={{ padding: "0 14px 90px", maxWidth: 480, margin: "0 auto" }}>
+        <div className="fl-col" style={{ padding: "0 14px 90px" }}>
           <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 6, marginBottom: 18 }}>
             {CATEGORIES.map((c) => (
               <button
@@ -183,7 +183,7 @@ export function ContestScreen({ session, userId, isGuest, onRequireAuth }) {
       )}
 
       {view === "suggest" && (
-        <div style={{ padding: "0 14px 90px", maxWidth: 480, margin: "0 auto" }}>
+        <div className="fl-col" style={{ padding: "0 14px 90px" }}>
           <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: C.inkSoft, marginBottom: 16, lineHeight: 1.5 }}>
             Gelecek ayın yarışma kategorilerini topluluk seçiyor. En çok oy alan 4 kategori bir sonraki aya taşınır.
           </div>

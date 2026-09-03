@@ -64,7 +64,7 @@ export function SearchScreen({ session, userId, onBack, onOpenProfile }) {
   return (
     <div>
       <TopBar title="Ara" onBack={onBack} />
-      <div style={{ padding: "14px 18px", maxWidth: 480, margin: "0 auto" }}>
+      <div className="fl-col" style={{ padding: "14px 18px" }}>
         <div style={{ position: "relative", marginBottom: 18 }}>
           <input
             autoFocus

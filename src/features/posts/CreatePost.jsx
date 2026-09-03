@@ -116,7 +116,7 @@ export function CreatePostScreen({ myPets, session, userId, onPublish, onCancel 
   return (
     <div>
       <TopBar title="Yeni Gönderi" onBack={onCancel} />
-      <div style={{ padding: "16px 18px 90px", maxWidth: 480, margin: "0 auto" }}>
+      <div className="fl-col" style={{ padding: "16px 18px 90px" }}>
         <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} style={{ display: "none" }} />
         <div
           onClick={() => fileInputRef.current?.click()}

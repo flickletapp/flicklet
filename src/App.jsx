@@ -12,7 +12,7 @@ import { UserProfileView } from "./features/profiles/UserProfileView";
 import { SearchScreen } from "./features/profiles/Search";
 import { InboxScreen } from "./features/messages/Inbox";
 import { ChatScreen } from "./features/messages/Chat";
-import { NavBar } from "./components/ui";
+import { NavBar, DesktopSideNav, TrendingSection } from "./components/ui";
 import { ComplaintModal, SignupPromptModal } from "./components/modals";
 
 export default function FlickletApp() {
@@ -41,8 +41,83 @@ export default function FlickletApp() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Nunito:wght@400;600;700;800&display=swap');
         * { box-sizing: border-box; }
+        html, body { overflow-x: hidden; }
         input:focus { border-color: ${C.mustard} !important; }
         ::-webkit-scrollbar { display: none; }
+
+        /* Ana içerik sütunu: telefon 480px, tablet 640px, masaüstü 720px
+           (ortada 650-750px hedefine uyar). Bottom-sheet/modal genişlikleri
+           bilinçli olarak 480px'te sabit bırakıldı, bu sınıfa dahil değil. */
+        .fl-col {
+          max-width: 480px;
+          margin: 0 auto;
+          width: 100%;
+        }
+        @media (min-width: 640px) {
+          .fl-col { max-width: 640px; }
+        }
+        @media (min-width: 1024px) {
+          .fl-col { max-width: 720px; }
+        }
+
+        .fl-hide-desktop { }
+        @media (min-width: 1024px) {
+          .fl-hide-desktop { display: none !important; }
+        }
+
+        /* Alt mobil navigasyon: telefon/tablette 480/640px'te ortalanır,
+           masaüstünde (sol dikey menü onun yerini alır) gizlenir. */
+        .fl-navbar {
+          max-width: 480px;
+          margin: 0 auto;
+        }
+        @media (min-width: 640px) {
+          .fl-navbar { max-width: 640px; }
+        }
+        @media (min-width: 1024px) {
+          .fl-navbar { display: none !important; }
+        }
+
+        /* Masaüstü (>=1024px) 3 sütunlu kabuk: sol sabit menü, ortada
+           650-750px ana akış, sağda "Gündemde". Toplam ~1200-1400px
+           kullanılabilir alanda ortalanır. */
+        .fl-sidenav { display: none; }
+        .fl-trending { display: none; }
+        @media (min-width: 1024px) {
+          .fl-shell {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 28px;
+            max-width: 1360px;
+            margin: 0 auto;
+            padding: 0 24px;
+          }
+          .fl-sidenav {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            position: sticky;
+            top: 24px;
+            width: 220px;
+            flex: 0 0 220px;
+            align-self: flex-start;
+          }
+          .fl-main {
+            width: 720px;
+            max-width: 720px;
+            flex: 0 0 720px;
+            min-width: 0;
+          }
+          .fl-trending {
+            display: block;
+            position: sticky;
+            top: 24px;
+            width: 300px;
+            flex: 0 0 300px;
+            align-self: flex-start;
+          }
+        }
       `}</style>
 
       {phase === "loading" && (
@@ -53,54 +128,60 @@ export default function FlickletApp() {
       {phase === "auth" && <AuthScreen onDone={auth.handleAuthDone} onGuest={auth.enterGuestMode} />}
       {phase === "setup" && <ProfileSetupScreen session={session} userId={userId} onDone={auth.completeOnboarding} />}
       {phase === "app" && !creating && !viewingProfile && !searching && !inboxOpen && !activeChat && (
-        <>
-          {tab === "feed" && (
-            <FeedScreen
-              session={session}
-              userId={userId}
-              myName={user.name}
-              refreshKey={feedRefreshKey}
-              onOpenComplaint={(postId) => setComplaintPostId(postId)}
-              onOpenProfile={(p) => setViewingProfile(p)}
-              onCompose={() => setCreating(true)}
-              onOpenSearch={() => setSearching(true)}
-              onOpenInbox={() => setInboxOpen(true)}
-              myFirstPet={myPets[0]}
-              isGuest={isGuest}
-              onRequireAuth={requireAuth}
-            />
-          )}
-          {tab === "contest" && (
-            <ContestScreen session={session} userId={userId} isGuest={isGuest} onRequireAuth={requireAuth} />
-          )}
-          {tab === "discover" && (
-            <DiscoverScreen
-              session={session}
-              userId={userId}
-              myName={user.name}
-              refreshKey={feedRefreshKey}
-              onOpenProfile={(p) => setViewingProfile(p)}
-              onOpenComplaint={(postId) => setComplaintPostId(postId)}
-              isGuest={isGuest}
-              onRequireAuth={requireAuth}
-            />
-          )}
-          {tab === "profile" && (
-            <ProfileScreen
-              session={session}
-              userId={userId}
-              user={user}
-              myPets={myPets}
-              isPrivate={isPrivate}
-              setIsPrivate={auth.setIsPrivate}
-              onOpenProfile={(p) => setViewingProfile(p)}
-              onLogout={handleLogout}
-              onAddPet={auth.addPet}
-              onUpdateUserName={auth.updateUserName}
-            />
-          )}
-          <NavBar tab={tab} setTab={setTab} isGuest={isGuest} onRequireAuth={requireAuth} onAdd={() => setCreating(true)} />
-        </>
+        <div className="fl-shell">
+          <DesktopSideNav tab={tab} setTab={setTab} isGuest={isGuest} onRequireAuth={requireAuth} onAdd={() => setCreating(true)} />
+          <div className="fl-main">
+            {tab === "feed" && (
+              <FeedScreen
+                session={session}
+                userId={userId}
+                myName={user.name}
+                refreshKey={feedRefreshKey}
+                onOpenComplaint={(postId) => setComplaintPostId(postId)}
+                onOpenProfile={(p) => setViewingProfile(p)}
+                onCompose={() => setCreating(true)}
+                onOpenSearch={() => setSearching(true)}
+                onOpenInbox={() => setInboxOpen(true)}
+                myFirstPet={myPets[0]}
+                isGuest={isGuest}
+                onRequireAuth={requireAuth}
+              />
+            )}
+            {tab === "contest" && (
+              <ContestScreen session={session} userId={userId} isGuest={isGuest} onRequireAuth={requireAuth} />
+            )}
+            {tab === "discover" && (
+              <DiscoverScreen
+                session={session}
+                userId={userId}
+                myName={user.name}
+                refreshKey={feedRefreshKey}
+                onOpenProfile={(p) => setViewingProfile(p)}
+                onOpenComplaint={(postId) => setComplaintPostId(postId)}
+                isGuest={isGuest}
+                onRequireAuth={requireAuth}
+              />
+            )}
+            {tab === "profile" && (
+              <ProfileScreen
+                session={session}
+                userId={userId}
+                user={user}
+                myPets={myPets}
+                isPrivate={isPrivate}
+                setIsPrivate={auth.setIsPrivate}
+                onOpenProfile={(p) => setViewingProfile(p)}
+                onLogout={handleLogout}
+                onAddPet={auth.addPet}
+                onUpdateUserName={auth.updateUserName}
+              />
+            )}
+            <NavBar tab={tab} setTab={setTab} isGuest={isGuest} onRequireAuth={requireAuth} onAdd={() => setCreating(true)} />
+          </div>
+          <aside className="fl-trending">
+            <TrendingSection layout="vertical" />
+          </aside>
+        </div>
       )}
       {phase === "app" && creating && (
         <CreatePostScreen

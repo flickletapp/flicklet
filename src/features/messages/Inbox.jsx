@@ -58,7 +58,7 @@ export function InboxScreen({ session, userId, onBack, onOpenChat }) {
   return (
     <div>
       <TopBar title="Mesajlar" onBack={onBack} />
-      <div style={{ padding: "8px 10px", maxWidth: 480, margin: "0 auto" }}>
+      <div className="fl-col" style={{ padding: "8px 10px" }}>
         {loading && <LoadingState padding="40px 20px" />}
         {!loading &&
           conversations.map((c) => (
