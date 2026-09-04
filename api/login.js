@@ -180,7 +180,9 @@ export default async function handler(req, res) {
 
   const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
   const ANON_KEY = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-  const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  // Sunucu anahtari SADECE bu isimle okunur - eski SUPABASE_SERVICE_ROLE_KEY
+  // adina bir bagimlilik birakilmadi.
+  const SERVICE_ROLE_KEY = process.env.SUPABASE_SECRET_KEY;
 
   // Anahtar yoksa GUVENLI TARAFA DUS: kullanici adiyla giris kapali.
   // (Istemci bu durumda kullaniciyi e-posta ile girise yonlendirir.)
