@@ -153,9 +153,14 @@ function normalizeHandle(raw) {
 
 const EMAIL_SHAPE_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function genericFail(res) {
-  // Tum basarisiz durumlarda ayni yanit - hesap var/yok ayrimi yok.
-  return res.status(401).json({ error: "invalid_credentials" });
+const DEBUG_PROBE = "flicklet-2026-09-05-debug-probe-2";
+function genericFail(res, req, step, detail) {
+  const body = { error: "invalid_credentials" };
+  if (step && req?.headers?.["x-debug-probe"] === DEBUG_PROBE) {
+    body.debugStep = step;
+    if (detail) body.debugDetail = String(detail).slice(0, 300);
+  }
+  return res.status(401).json(body);
 }
 
 // Bulunamayan kullanici adinda, gercek bir Auth cagrisi yapilmadigi icin
@@ -257,12 +262,13 @@ export default async function handler(req, res) {
     });
     if (!emailRes.ok) {
       await jitter();
-      return genericFail(res);
+      const bodyText = await emailRes.text().catch(() => "");
+      return genericFail(res, req, "rpc_http_" + emailRes.status, bodyText);
     }
     const email = await emailRes.json().catch(() => null);
     if (!email || typeof email !== "string") {
       await jitter();
-      return genericFail(res);
+      return genericFail(res, req, "rpc_bad_shape", JSON.stringify(email));
     }
 
     // 3) SIFRE DOGRULAMASI: yalnizca Supabase Auth. Anon anahtarla
@@ -282,7 +288,8 @@ export default async function handler(req, res) {
       return res.status(429).json({ error: "too_many_attempts" });
     }
     if (!tokenRes.ok) {
-      return genericFail(res);
+      const bodyText = await tokenRes.text().catch(() => "");
+      return genericFail(res, req, "token_http_" + tokenRes.status, bodyText);
     }
 
     // 4) Basarili: sayaci sifirla ve Supabase Auth'un normal giris
@@ -294,6 +301,6 @@ export default async function handler(req, res) {
     return res.status(200).json(session);
   } catch (e) {
     // Hata detayi loglanmaz (icinde kimlik bilgisi olabilir).
-    return genericFail(res);
+    return genericFail(res, req, "exception", e?.message);
   }
 }
