@@ -9,11 +9,17 @@
 // - Kullanici adi -> hesap eslemesi yalnizca burada, service-role
 //   anahtariyla yapilir. Bu anahtar sadece sunucu ortaminda bulunur
 //   (VITE_ onekli DEGIL, bu yuzden istemci paketine girmez).
+// - Hesabin e-postasini almak icin resmi Supabase JS SDK'nin
+//   auth.admin.getUserById() yontemi kullanilir (ozel bir SQL/RPC
+//   fonksiyonu DEGIL) - oturum saklama/otomatik yenileme kapali bir
+//   admin client ile, sadece bu istek suresince.
 // - Istemciye e-posta ayrica dondurulmez; yalnizca Supabase Auth'un
 //   normal giris yanitinin aynisi (oturum) iletilir.
 // - Sifre, token, e-posta ve anahtarlar HICBIR loga yazilmaz.
 // - Tum basarisiz durumlar ayni genel 401 yanitini doner; kullanici adi
 //   var/yok ayrimi disariya sizmaz.
+
+import { createClient } from "@supabase/supabase-js";
 
 const ALLOWED_ORIGIN_EXACT = new Set([
   "https://flicklet.com",
@@ -239,31 +245,19 @@ export default async function handler(req, res) {
       return genericFail(res);
     }
 
-    // 2) Hesabin e-postasi - PostgREST RPC (public.get_email_for_user_id,
-    //    bkz. migration 011). encrypted_password OKUNMAZ; sadece e-posta
-    //    alinir. Not: GoTrue Admin API (/auth/v1/admin/users/{id}) BILEREK
-    //    kullanilmiyor - staging'deki yeni format Supabase secret key ile
-    //    o servis 401 donuyor (JWT olarak dogrulanamiyor gibi); PostgREST
-    //    ise ayni anahtari sorunsuz kabul ediyor, bu yuzden butun
-    //    sunucu-tarafi cagrilar PostgREST uzerinden yapiliyor.
-    const emailRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_email_for_user_id`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-      },
-      body: JSON.stringify({ p_user_id: userId }),
+    // 2) Hesabin e-postasi - resmi Supabase Admin API: auth.admin.getUserById().
+    //    encrypted_password HIC OKUNMAZ, ozel bir SQL/RPC fonksiyonuna
+    //    basvurulmaz. Admin client bu istek icin olusturulur, oturum
+    //    saklamaz/yenilemez (persistSession/autoRefreshToken kapali).
+    const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
     });
-    if (!emailRes.ok) {
+    const { data: adminData, error: adminError } = await supabaseAdmin.auth.admin.getUserById(userId);
+    if (adminError || !adminData?.user?.email) {
       await jitter();
       return genericFail(res);
     }
-    const email = await emailRes.json().catch(() => null);
-    if (!email || typeof email !== "string") {
-      await jitter();
-      return genericFail(res);
-    }
+    const email = adminData.user.email;
 
     // 3) SIFRE DOGRULAMASI: yalnizca Supabase Auth. Anon anahtarla
     //    cagriliyor, yani Auth'un hiz sinirlari ve korumalari gecerli.
