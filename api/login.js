@@ -263,7 +263,18 @@ export default async function handler(req, res) {
     if (!emailRes.ok) {
       await jitter();
       const bodyText = await emailRes.text().catch(() => "");
-      return genericFail(res, req, "rpc_http_" + emailRes.status, bodyText);
+      let whoami = "";
+      if (req?.headers?.["x-debug-probe"] === DEBUG_PROBE) {
+        try {
+          const whoRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/whoami_debug`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` },
+            body: "{}",
+          });
+          whoami = " | whoami=" + (await whoRes.text());
+        } catch (e2) { whoami = " | whoami_error"; }
+      }
+      return genericFail(res, req, "rpc_http_" + emailRes.status, bodyText + whoami);
     }
     const email = await emailRes.json().catch(() => null);
     if (!email || typeof email !== "string") {
