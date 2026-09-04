@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { C, FONT_BODY } from "./theme";
 import { useAuth } from "./features/auth/useAuth";
 import { AuthScreen } from "./features/auth/Auth";
@@ -15,9 +15,35 @@ import { ChatScreen } from "./features/messages/Chat";
 import { NavBar, DesktopSideNav, TrendingSection } from "./components/ui";
 import { ComplaintModal, SignupPromptModal } from "./components/modals";
 
+// Ana bottom-nav/side-nav sekmeleri - tek gecerli kaynak. Baska hicbir
+// yerde bu liste ayrica yazilmiyor; gecersiz/eksik ?tab= degeri hep
+// "feed"e duser.
+const TABS = ["feed", "contest", "discover", "profile"];
+
+function readTabFromUrl() {
+  try {
+    const t = new URL(window.location.href).searchParams.get("tab");
+    return TABS.includes(t) ? t : "feed";
+  } catch {
+    return "feed";
+  }
+}
+
+// Digim query parametrelerine ve hash'e dokunmadan sadece "tab"i
+// gunceller/kaldirir (feed = URL'de hic tab parametresi olmamasi).
+function urlWithTab(tab) {
+  const url = new URL(window.location.href);
+  if (tab === "feed") {
+    url.searchParams.delete("tab");
+  } else {
+    url.searchParams.set("tab", tab);
+  }
+  return url;
+}
+
 export default function FlickletApp() {
   const auth = useAuth();
-  const [tab, setTab] = useState("feed");
+  const [tab, setTabState] = useState(readTabFromUrl);
   const [complaintPostId, setComplaintPostId] = useState(null);
   const [promptOpen, setPromptOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -27,11 +53,40 @@ export default function FlickletApp() {
   const [activeChat, setActiveChat] = useState(null);
   const [feedRefreshKey, setFeedRefreshKey] = useState(0);
 
+  // Normal sekme degisimi (nav tiklamasi, yayinlama sonrasi Akis'a
+  // donus vb.) - URL'e YENI bir gecmis girdisi ekler. Ayni sekmeye
+  // tekrar basilirsa (next === tab) gecmisi sismemesi icin hicbir
+  // history cagrisi yapilmaz.
+  const navigateTab = (key) => {
+    const next = TABS.includes(key) ? key : "feed";
+    if (next === tab) return;
+    setTabState(next);
+    window.history.pushState(null, "", urlWithTab(next).toString());
+  };
+
+  // Cikis/sifirlama durumu - gecmise YENI girdi eklemez, mevcut
+  // girdinin yerini alir. Boylece cikistan sonra geri tusu, oturum
+  // acikken ziyaret edilmis korumali bir sekmeyi yeniden acmaya
+  // calismaz (render zaten phase==="app" olmadan hicbir sekmeyi
+  // gostermiyor, ama URL de feed'e sifirlanir).
+  const resetTabUrl = () => {
+    setTabState("feed");
+    window.history.replaceState(null, "", urlWithTab("feed").toString());
+  };
+
+  // Tarayici geri/ileri tuslari: URL zaten degismis olur, sadece
+  // state'i ona gore senkronize et - yeni bir history girdisi EKLEME.
+  useEffect(() => {
+    const onPopState = () => setTabState(readTabFromUrl());
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
   const requireAuth = () => setPromptOpen(true);
 
   const handleLogout = () => {
     auth.handleLogout();
-    setTab("feed");
+    resetTabUrl();
   };
 
   const { phase, session, userId, user, isPrivate, myPets, isGuest } = auth;
@@ -194,7 +249,7 @@ export default function FlickletApp() {
       {phase === "setup" && <ProfileSetupScreen session={session} userId={userId} onDone={auth.completeOnboarding} />}
       {phase === "app" && !creating && !viewingProfile && !searching && !inboxOpen && !activeChat && (
         <div className="fl-shell">
-          <DesktopSideNav tab={tab} setTab={setTab} isGuest={isGuest} onRequireAuth={requireAuth} onAdd={() => setCreating(true)} />
+          <DesktopSideNav tab={tab} setTab={navigateTab} isGuest={isGuest} onRequireAuth={requireAuth} onAdd={() => setCreating(true)} />
           <div className="fl-main">
             {tab === "feed" && (
               <FeedScreen
@@ -241,7 +296,7 @@ export default function FlickletApp() {
                 onUpdateUserName={auth.updateUserName}
               />
             )}
-            <NavBar tab={tab} setTab={setTab} isGuest={isGuest} onRequireAuth={requireAuth} onAdd={() => setCreating(true)} />
+            <NavBar tab={tab} setTab={navigateTab} isGuest={isGuest} onRequireAuth={requireAuth} onAdd={() => setCreating(true)} />
           </div>
           <aside className="fl-trending">
             <TrendingSection layout="vertical" />
@@ -255,7 +310,7 @@ export default function FlickletApp() {
           userId={userId}
           onPublish={() => {
             setCreating(false);
-            setTab("feed");
+            navigateTab("feed");
             setFeedRefreshKey((k) => k + 1);
           }}
           onCancel={() => setCreating(false)}
