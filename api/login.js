@@ -51,17 +51,22 @@ function applyCors(req, res) {
 }
 
 // --- Hiz siniri -----------------------------------------------------
-// Not: Serverless ortamda bellek ornek (instance) basinadir, bu yuzden
-// bu katman "en iyi caba" seviyesindedir - kaba kuvvet denemelerini
-// yavaslatir ama tek basina kesin garanti degildir. Asil koruma,
-// sifre denemelerinin tamaminin Supabase Auth'un kendi korumali
-// ucundan gecmesidir. Daha siki garanti gerekirse paylasimli bir
-// depoya (Upstash/Redis vb.) tasinmalidir.
-const WINDOW_MS = 10 * 60 * 1000; // 10 dakika
+// ASIL sayac VERITABANINDA: private.login_attempts tablosu +
+// public.login_rate_limit_hit/reset fonksiyonlari (bkz. migration 010).
+// Boylece sayac butun Vercel ornekleri arasinda ORTAK ve yeniden
+// baslatmalara dayanikli; artirma+pencere kontrolu tek SQL ifadesiyle
+// atomik. Tablo `private` semasinda (PostgREST disariya acmaz) ve
+// fonksiyonlarin EXECUTE yetkisi yalnizca service_role'da - yani
+// tarayici bu kayitlari okuyamaz, degistiremez, silemez.
+//
+// Asagidaki bellek-ici sayac yalnizca YEDEK: veritabanina ulasilamazsa
+// istek tamamen sinirsiz kalmasin diye (ornek basina, en iyi caba).
+const WINDOW_SECONDS = 10 * 60; // 10 dakika
+const WINDOW_MS = WINDOW_SECONDS * 1000;
 const MAX_ATTEMPTS = 8;
 const attempts = new Map(); // key -> { count, resetAt }
 
-function rateLimit(key) {
+function rateLimitInMemory(key) {
   const now = Date.now();
   const entry = attempts.get(key);
   if (!entry || now > entry.resetAt) {
@@ -80,6 +85,55 @@ function sweep() {
   const now = Date.now();
   for (const [k, v] of attempts) {
     if (now > v.resetAt) attempts.delete(k);
+  }
+}
+
+// Veritabanindaki ORTAK sayac. Basarisiz olursa (ag/DB sorunu) yedek
+// olarak bellek-ici sayaca duser - hicbir durumda sinirsiz kalmaz.
+async function rateLimitShared(supabaseUrl, serviceKey, key) {
+  try {
+    const r = await fetch(`${supabaseUrl}/rest/v1/rpc/login_rate_limit_hit`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+      },
+      body: JSON.stringify({
+        p_key: key,
+        p_window_seconds: WINDOW_SECONDS,
+        p_max_attempts: MAX_ATTEMPTS,
+      }),
+    });
+    if (!r.ok) return rateLimitInMemory(key);
+    const rows = await r.json();
+    const row = Array.isArray(rows) ? rows[0] : rows;
+    if (!row || typeof row.allowed !== "boolean") return rateLimitInMemory(key);
+    return row.allowed
+      ? { limited: false }
+      : { limited: true, retryAfter: row.retry_after || WINDOW_SECONDS };
+  } catch (e) {
+    // Hata detayi loglanmaz.
+    return rateLimitInMemory(key);
+  }
+}
+
+// Basarili giristen sonra sayaci sifirla.
+async function rateLimitReset(supabaseUrl, serviceKey, key) {
+  attempts.delete(key);
+  try {
+    await fetch(`${supabaseUrl}/rest/v1/rpc/login_rate_limit_reset`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+      },
+      body: JSON.stringify({ p_key: key }),
+    });
+  } catch (e) {
+    // Sifirlama basarisiz olsa da giris basarili sayilir; sayac zaten
+    // pencere sonunda kendiliginden sifirlanir.
   }
 }
 
@@ -149,7 +203,11 @@ export default async function handler(req, res) {
   if (!handle) return genericFail(res);
 
   if (Math.random() < 0.02) sweep();
-  const limit = rateLimit(`${clientIp(req)}|${handle}`);
+  // Sinir, hesap ARANMADAN once uygulanir: var olmayan kullanici adlari
+  // da sayilir, boylece "hesap var mi" bilgisi denemeler uzerinden
+  // sizmaz. Anahtar = IP + normalize edilmis kullanici adi.
+  const rateKey = `${clientIp(req)}|${handle}`;
+  const limit = await rateLimitShared(SUPABASE_URL, SERVICE_ROLE_KEY, rateKey);
   if (limit.limited) {
     res.setHeader("Retry-After", String(limit.retryAfter));
     return res.status(429).json({ error: "too_many_attempts" });
@@ -218,10 +276,12 @@ export default async function handler(req, res) {
       return genericFail(res);
     }
 
-    // 4) Basarili: Supabase Auth'un normal giris yanitinin AYNISI
-    //    donuluyor (e-posta ayrica/ozel olarak eklenmiyor - bu yanit,
-    //    e-postayla giris yapildiginda da alinan yanitin ta kendisi).
+    // 4) Basarili: sayaci sifirla ve Supabase Auth'un normal giris
+    //    yanitinin AYNISINI don (e-posta ayrica/ozel olarak eklenmiyor -
+    //    bu yanit, e-postayla giris yapildiginda da alinan yanitin ta
+    //    kendisi).
     const session = await tokenRes.json();
+    await rateLimitReset(SUPABASE_URL, SERVICE_ROLE_KEY, rateKey);
     return res.status(200).json(session);
   } catch (e) {
     // Hata detayi loglanmaz (icinde kimlik bilgisi olabilir).
