@@ -1,9 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { Lock, Globe, Plus, Camera, LogOut, X, Heart, MessageCircle, Ban, ChevronRight, User as UserIcon } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
-import { TopBar, BlobAvatar, EmptyState, ErrorBanner, TextField } from "../../components/ui";
+import { TopBar, BlobAvatar, EmptyState, ErrorBanner, TextField, UsernameField } from "../../components/ui";
 import { FollowListModal } from "../../components/modals";
-import { supabaseUpdate, supabaseCount, supabaseSelect, supabaseUploadImage, supabaseRpc, supabaseInsert, supabaseDelete } from "../../lib/supabase/client";
+import {
+  supabaseUpdate,
+  supabaseCount,
+  supabaseSelect,
+  supabaseUploadImage,
+  supabaseRpc,
+  supabaseInsert,
+  supabaseDelete,
+  validateUsername,
+  mapUsernameDbError,
+} from "../../lib/supabase/client";
 import { fetchFollowList } from "./followList";
 
 const PET_TYPES = [
@@ -248,7 +258,10 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
 
   const openEditProfile = () => {
     setEditName(user.name || "");
-    setEditHandle(handle || "");
+    // DB degeri "@kullaniciadi" formatinda saklaniyor - alan acilirken
+    // sadece BASTAKI TEK "@" kaldirilir (UsernameField "@"yi kendi
+    // gorsel olarak zaten sabit gosteriyor, bkz. ui.jsx).
+    setEditHandle((handle || "").replace(/^@/, ""));
     setEditBio(bio || "");
     setEditProfileError("");
     setEditProfileOpen(true);
@@ -260,8 +273,12 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
       setEditProfileError("Ad boş olamaz.");
       return;
     }
-    if (!editHandle.trim()) {
-      setEditProfileError("Kullanıcı adı boş olamaz.");
+    // Kayit formuyla AYNI dogrulama - bkz. Auth.jsx handleSignUp.
+    // Gecersiz karakterler sessizce temizlenmez/donusturulmez: gecersizse
+    // hicbir ag/DB istegi yapilmadan acik Turkce hata gosterilir.
+    const usernameCheck = validateUsername(editHandle);
+    if (!usernameCheck.valid) {
+      setEditProfileError(usernameCheck.error);
       return;
     }
     if (editBio.length > 160) {
@@ -272,26 +289,30 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
     // null gonderiliyor (profiles.bio nullable, bkz. 007_profiles_bio).
     // Ad ve kullanici adi bunun disinda, yukarida ayrica zorunlu tutuluyor.
     const trimmedBio = editBio.trim() ? editBio.trim() : null;
+    const newHandle = "@" + usernameCheck.value;
     setSavingProfile(true);
     try {
       // profiles_update RLS'i (auth.uid()=id) zaten sadece kendi
-      // profilimi guncellememe izin veriyor. handle icin tek kural
-      // veritabanindaki case-insensitive UNIQUE index'i
-      // (profiles_handle_lower_unique, bkz. 013_user_chosen_handle) -
-      // format/rezerve kelime kontrolu roadmap'te henuz yok. Catch,
-      // cakisma hatasini anlasilir bir mesaja ceviriyor (ham postgrest
-      // hatasi gosterilmiyor).
+      // profilimi guncellememe izin veriyor. Format ustteki
+      // validateUsername ile, benzersizlik ise veritabanindaki
+      // case-insensitive UNIQUE index'i (profiles_handle_lower_unique,
+      // bkz. 013_user_chosen_handle) ve 015'teki DB guard trigger'i ile
+      // korunuyor - client kontrolu asilsa bile DB reddediyor. Catch,
+      // ham postgrest mesajini degil ayni Turkce metni gosteriyor.
       await supabaseUpdate("profiles", session.access_token, `id=eq.${userId}`, {
         display_name: editName.trim(),
-        handle: editHandle.trim(),
+        handle: newHandle,
         bio: trimmedBio,
       });
       onUpdateUserName && onUpdateUserName(editName.trim());
-      setHandle(editHandle.trim());
+      setHandle(newHandle);
       setBio(trimmedBio || "");
       setEditProfileOpen(false);
     } catch (e) {
-      if (/handle|duplicate|unique/i.test(e.message || "")) {
+      const mapped = mapUsernameDbError(e.message);
+      if (mapped) {
+        setEditProfileError(mapped);
+      } else if (/handle|duplicate|unique/i.test(e.message || "")) {
         setEditProfileError("Bu kullanıcı adı kullanılıyor.");
       } else {
         setEditProfileError(e.message);
@@ -770,7 +791,12 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
             </div>
             {editProfileError && <ErrorBanner style={{ marginBottom: 12 }}>{editProfileError}</ErrorBanner>}
             <TextField label="Görünen ad" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Adın Soyadın" />
-            <TextField label="Kullanıcı adı" value={editHandle} onChange={(e) => setEditHandle(e.target.value)} placeholder="@kullaniciadi" />
+            <UsernameField
+              value={editHandle}
+              onChange={(e) => setEditHandle(e.target.value)}
+              placeholder="kullaniciadi"
+              hint="Yalnızca harf, rakam ve alt çizgi (_) kullanılabilir, 3-20 karakter. Örn: ayse_yilmaz93."
+            />
             <label style={{ display: "block", marginBottom: 16 }}>
               <span style={{ fontFamily: FONT_BODY, fontSize: 13, fontWeight: 700, color: C.inkSoft }}>Biyografi</span>
               <textarea

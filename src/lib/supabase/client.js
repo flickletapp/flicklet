@@ -58,6 +58,21 @@ export function validateUsername(raw) {
   return { valid: true, value: cleaned };
 }
 
+// profiles.handle uzerinde dogrudan INSERT/UPDATE'i reddeden DB trigger'inin
+// (bkz. 015_profiles_handle_db_guard) SQL MESSAGE kisimlari icin Turkce
+// karsilik. Client kontrolu asilip DB'ye ham bir istek giderse, PostgREST'in
+// dondurdugu ham kod-kelime ("invalid_username"/"username_taken") kullaniciya
+// GOSTERILMEZ - burada ayni Turkce metne cevrilir.
+export function mapUsernameDbError(rawMessage) {
+  if (rawMessage === "invalid_username") {
+    return "Kullanıcı adı yalnızca harf, rakam ve alt çizgi (_) içerebilir, 3-20 karakter olmalı. Örn: ayse_yilmaz93";
+  }
+  if (rawMessage === "username_taken") {
+    return "Bu kullanıcı adı az önce alındı. Lütfen başka bir kullanıcı adı seç.";
+  }
+  return null;
+}
+
 // Hesap olusturulmadan ONCE uygunluk kontrolu - profiles tablosu
 // herkese acik okunabilir (RLS: using(true)), oturum gerekmez.
 // Case-insensitive karsilastirma (ilike) kullanilir.
