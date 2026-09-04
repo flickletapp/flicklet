@@ -153,9 +153,16 @@ function normalizeHandle(raw) {
 
 const EMAIL_SHAPE_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function genericFail(res) {
-  // Tum basarisiz durumlarda ayni yanit - hesap var/yok ayrimi yok.
-  return res.status(401).json({ error: "invalid_credentials" });
+// GECICI TANI ARACI: sadece x-debug-probe basligi TAM olarak bu sabit
+// degere esitse adim adi eklenir (parola/e-posta/anahtar ICERMEZ).
+// Bu blok, sorun giderme bitince KALDIRILACAK.
+const DEBUG_PROBE = "flicklet-2026-09-05-debug-probe";
+function genericFail(res, req, step) {
+  const body = { error: "invalid_credentials" };
+  if (step && req?.headers?.["x-debug-probe"] === DEBUG_PROBE) {
+    body.debugStep = step;
+  }
+  return res.status(401).json(body);
 }
 
 // Bulunamayan kullanici adinda, gercek bir Auth cagrisi yapilmadigi icin
@@ -192,17 +199,17 @@ export default async function handler(req, res) {
 
   const { identifier, password } = req.body || {};
   if (!identifier || !password || typeof identifier !== "string" || typeof password !== "string") {
-    return genericFail(res);
+    return genericFail(res, req, "missing_fields");
   }
 
   // E-posta girildiyse burasi hic kullanilmamali - istemci dogrudan
   // Supabase Auth'a gider. Yine de gelirse ayni genel yanit.
   if (EMAIL_SHAPE_RE.test(identifier.trim())) {
-    return genericFail(res);
+    return genericFail(res, req, "email_shape_rejected");
   }
 
   const handle = normalizeHandle(identifier);
-  if (!handle) return genericFail(res);
+  if (!handle) return genericFail(res, req, "empty_handle");
 
   if (Math.random() < 0.02) sweep();
   // Sinir, hesap ARANMADAN once uygulanir: var olmayan kullanici adlari
@@ -230,13 +237,13 @@ export default async function handler(req, res) {
     );
     if (!profileRes.ok) {
       await jitter();
-      return genericFail(res);
+      return genericFail(res, req, "profile_lookup_http_" + profileRes.status);
     }
     const profiles = await profileRes.json();
     const userId = Array.isArray(profiles) && profiles[0] ? profiles[0].id : null;
     if (!userId) {
       await jitter();
-      return genericFail(res);
+      return genericFail(res, req, "profile_not_found");
     }
 
     // 2) Hesabin e-postasi - GoTrue Admin API (sunucu tarafi).
@@ -249,13 +256,13 @@ export default async function handler(req, res) {
     });
     if (!adminRes.ok) {
       await jitter();
-      return genericFail(res);
+      return genericFail(res, req, "admin_lookup_http_" + adminRes.status);
     }
     const adminUser = await adminRes.json();
     const email = adminUser?.email;
     if (!email) {
       await jitter();
-      return genericFail(res);
+      return genericFail(res, req, "admin_no_email");
     }
 
     // 3) SIFRE DOGRULAMASI: yalnizca Supabase Auth. Anon anahtarla
@@ -275,7 +282,7 @@ export default async function handler(req, res) {
       return res.status(429).json({ error: "too_many_attempts" });
     }
     if (!tokenRes.ok) {
-      return genericFail(res);
+      return genericFail(res, req, "token_exchange_http_" + tokenRes.status);
     }
 
     // 4) Basarili: sayaci sifirla ve Supabase Auth'un normal giris
@@ -287,6 +294,6 @@ export default async function handler(req, res) {
     return res.status(200).json(session);
   } catch (e) {
     // Hata detayi loglanmaz (icinde kimlik bilgisi olabilir).
-    return genericFail(res);
+    return genericFail(res, req, "exception");
   }
 }
