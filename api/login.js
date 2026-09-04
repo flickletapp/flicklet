@@ -159,9 +159,18 @@ function normalizeHandle(raw) {
 
 const EMAIL_SHAPE_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function genericFail(res) {
-  // Tum basarisiz durumlarda ayni yanit - hesap var/yok ayrimi yok.
-  return res.status(401).json({ error: "invalid_credentials" });
+// GECICI, DAR KAPSAMLI OLCUM: sadece x-debug-probe basligi tam olarak bu
+// sabit degere esitse, YALNIZCA iki guvenli boolean eklenir. Hicbir ham
+// hata/kimlik/e-posta/anahtar/istek-govdesi eklenmez. Bu blok, sorun
+// tanindiktan sonra KALDIRILACAK.
+const DEBUG_PROBE = "flicklet-2026-09-05-debug-probe-3";
+function genericFail(res, req, flags) {
+  const body = { error: "invalid_credentials" };
+  if (flags && req?.headers?.["x-debug-probe"] === DEBUG_PROBE) {
+    if (typeof flags.admin_lookup_ok === "boolean") body.admin_lookup_ok = flags.admin_lookup_ok;
+    if (typeof flags.password_auth_ok === "boolean") body.password_auth_ok = flags.password_auth_ok;
+  }
+  return res.status(401).json(body);
 }
 
 // Bulunamayan kullanici adinda, gercek bir Auth cagrisi yapilmadigi icin
@@ -253,14 +262,16 @@ export default async function handler(req, res) {
       auth: { persistSession: false, autoRefreshToken: false },
     });
     const { data: adminData, error: adminError } = await supabaseAdmin.auth.admin.getUserById(userId);
-    if (adminError || !adminData?.user?.email) {
+    const admin_lookup_ok = !adminError && !!adminData?.user?.email;
+    if (!admin_lookup_ok) {
       await jitter();
-      return genericFail(res);
+      return genericFail(res, req, { admin_lookup_ok: false });
     }
     const email = adminData.user.email;
 
-    // 3) SIFRE DOGRULAMASI: yalnizca Supabase Auth. Anon anahtarla
-    //    cagriliyor, yani Auth'un hiz sinirlari ve korumalari gecerli.
+    // 3) SIFRE DOGRULAMASI: yalnizca Supabase Auth, yalnizca ANON_KEY
+    //    (VITE_SUPABASE_PUBLISHABLE_KEY) ile - secret key bu cagriya
+    //    HIC katilmiyor, sadece admin lookup icin kullanildi.
     const tokenRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
       method: "POST",
       headers: {
@@ -275,8 +286,9 @@ export default async function handler(req, res) {
       if (retryAfter) res.setHeader("Retry-After", retryAfter);
       return res.status(429).json({ error: "too_many_attempts" });
     }
-    if (!tokenRes.ok) {
-      return genericFail(res);
+    const password_auth_ok = tokenRes.ok;
+    if (!password_auth_ok) {
+      return genericFail(res, req, { admin_lookup_ok: true, password_auth_ok: false });
     }
 
     // 4) Basarili: sayaci sifirla ve Supabase Auth'un normal giris
