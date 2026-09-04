@@ -159,9 +159,16 @@ function normalizeHandle(raw) {
 
 const EMAIL_SHAPE_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function genericFail(res) {
-  // Tum basarisiz durumlarda ayni yanit - hesap var/yok ayrimi yok.
-  return res.status(401).json({ error: "invalid_credentials" });
+// GECICI, TEK BOOLEAN'LIK OLCUM: sadece x-debug-probe basligi tam olarak
+// bu sabit degere esitse admin_lookup_ok eklenir. Hicbir ham hata/kimlik/
+// e-posta/anahtar eklenmez. Kontrol sonrasi KALDIRILACAK.
+const DEBUG_PROBE = "flicklet-2026-09-05-debug-probe-4";
+function genericFail(res, req, adminLookupOk) {
+  const body = { error: "invalid_credentials" };
+  if (typeof adminLookupOk === "boolean" && req?.headers?.["x-debug-probe"] === DEBUG_PROBE) {
+    body.admin_lookup_ok = adminLookupOk;
+  }
+  return res.status(401).json(body);
 }
 
 // Bulunamayan kullanici adinda, gercek bir Auth cagrisi yapilmadigi icin
@@ -253,9 +260,10 @@ export default async function handler(req, res) {
       auth: { persistSession: false, autoRefreshToken: false },
     });
     const { data: adminData, error: adminError } = await supabaseAdmin.auth.admin.getUserById(userId);
-    if (adminError || !adminData?.user?.email) {
+    const adminLookupOk = !adminError && !!adminData?.user?.email;
+    if (!adminLookupOk) {
       await jitter();
-      return genericFail(res);
+      return genericFail(res, req, false);
     }
     const email = adminData.user.email;
 
@@ -277,7 +285,7 @@ export default async function handler(req, res) {
       return res.status(429).json({ error: "too_many_attempts" });
     }
     if (!tokenRes.ok) {
-      return genericFail(res);
+      return genericFail(res, req, true);
     }
 
     // 4) Basarili: sayaci sifirla ve Supabase Auth'un normal giris
