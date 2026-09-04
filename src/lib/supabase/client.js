@@ -28,8 +28,43 @@ export async function supabaseAuth(path, body) {
   return data;
 }
 
-export async function supabaseSignUp(email, password) {
-  return supabaseAuth("signup", { email, password });
+// data verilirse GoTrue'da raw_user_meta_data olarak saklanir -
+// handle_new_user() trigger'i (bkz. 013_user_chosen_handle migration)
+// kullaniciyi acikca sectigi kullanici adini buradan okur.
+export async function supabaseSignUp(email, password, data) {
+  return supabaseAuth("signup", data ? { email, password, data } : { email, password });
+}
+
+// Kullanici adinin gecerlilik kurallari - istemci tarafi ilk savunma
+// katmani. Sunucu tarafinda (handle_new_user trigger) ayni karakter
+// filtresi ikinci kez uygulanir; asil benzersizlik garantisi
+// profiles_handle_lower_unique index'inden gelir.
+const USERNAME_RE = /^[A-Za-z0-9_]{3,20}$/;
+
+// "@ridvan", "  ridvan " -> "ridvan". Bastaki "@" ve bosluklar temizlenir.
+export function normalizeUsernameInput(raw) {
+  return String(raw || "").trim().replace(/^@+/, "");
+}
+
+export function validateUsername(raw) {
+  const cleaned = normalizeUsernameInput(raw);
+  if (!cleaned) return { valid: false, error: "Kullanıcı adı boş olamaz." };
+  if (!USERNAME_RE.test(cleaned)) {
+    return {
+      valid: false,
+      error: "Kullanıcı adı yalnızca harf, rakam ve alt çizgi (_) içerebilir, 3-20 karakter olmalı. Örn: ayse_yilmaz93",
+    };
+  }
+  return { valid: true, value: cleaned };
+}
+
+// Hesap olusturulmadan ONCE uygunluk kontrolu - profiles tablosu
+// herkese acik okunabilir (RLS: using(true)), oturum gerekmez.
+// Case-insensitive karsilastirma (ilike) kullanilir.
+export async function checkUsernameAvailable(cleanedUsername) {
+  const pattern = encodeURIComponent("@" + cleanedUsername);
+  const rows = await supabaseSelect("profiles", null, `select=id&handle=ilike.${pattern}&limit=1`);
+  return rows.length === 0;
 }
 
 export async function supabaseSignIn(email, password) {

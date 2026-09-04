@@ -276,9 +276,11 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
     try {
       // profiles_update RLS'i (auth.uid()=id) zaten sadece kendi
       // profilimi guncellememe izin veriyor. handle icin tek kural
-      // veritabanindaki UNIQUE kisiti (profiles_handle_key) - format/
-      // rezerve kelime kontrolu roadmap'te henuz yok, o yuzden burada
-      // da eklenmedi; catch, cakisma hatasini oldugu gibi gosteriyor.
+      // veritabanindaki case-insensitive UNIQUE index'i
+      // (profiles_handle_lower_unique, bkz. 013_user_chosen_handle) -
+      // format/rezerve kelime kontrolu roadmap'te henuz yok. Catch,
+      // cakisma hatasini anlasilir bir mesaja ceviriyor (ham postgrest
+      // hatasi gosterilmiyor).
       await supabaseUpdate("profiles", session.access_token, `id=eq.${userId}`, {
         display_name: editName.trim(),
         handle: editHandle.trim(),
@@ -289,7 +291,11 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
       setBio(trimmedBio || "");
       setEditProfileOpen(false);
     } catch (e) {
-      setEditProfileError(e.message);
+      if (/handle|duplicate|unique/i.test(e.message || "")) {
+        setEditProfileError("Bu kullanıcı adı kullanılıyor.");
+      } else {
+        setEditProfileError(e.message);
+      }
     } finally {
       setSavingProfile(false);
     }

@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
-import { TextField, PrimaryButton, ErrorBanner } from "../../components/ui";
+import { TextField, UsernameField, PrimaryButton, ErrorBanner } from "../../components/ui";
 import {
   supabaseSignUp,
   supabaseSignInWithIdentifier,
+  validateUsername,
+  checkUsernameAvailable,
   LOGIN_GENERIC_ERROR,
   LOGIN_RATE_LIMITED,
   LOGIN_USERNAME_UNAVAILABLE,
@@ -12,6 +14,7 @@ import {
 export function AuthScreen({ onDone, onGuest }) {
   const [mode, setMode] = useState("login"); // login | signup | verify
   const [identifier, setIdentifier] = useState("");
+  const [username, setUsername] = useState(""); // yalnizca signup modunda
   const [pw, setPw] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -21,9 +24,20 @@ export function AuthScreen({ onDone, onGuest }) {
     setError("");
     if (!identifier || !pw) return setError("E-posta ve şifre gerekli.");
     if (pw.length < 8) return setError("Şifre en az 8 karakter olmalı.");
+    const usernameCheck = validateUsername(username);
+    if (!usernameCheck.valid) return setError(usernameCheck.error);
     setLoading(true);
     try {
-      const data = await supabaseSignUp(identifier, pw);
+      // Hesap olusturulmadan ONCE uygunluk kontrolu. Es zamanli bir
+      // cakisma (iki kisi ayni anda ayni adi secerse) bu kontrolden
+      // kacabilir - o durumda son guvence olarak veritabanindaki
+      // case-insensitive UNIQUE index devreye girer (bkz.
+      // 013_user_chosen_handle migration) ve signup asagidaki catch'e
+      // dusup ayni "kullaniliyor" mesajini gosterir.
+      const available = await checkUsernameAvailable(usernameCheck.value);
+      if (!available) return setError("Bu kullanıcı adı kullanılıyor.");
+
+      const data = await supabaseSignUp(identifier, pw, { handle: usernameCheck.value });
       if (data?.identities && data.identities.length === 0) {
         setError("Bu e-posta zaten kayıtlı. Lütfen giriş yap.");
         setMode("login");
@@ -31,7 +45,14 @@ export function AuthScreen({ onDone, onGuest }) {
       }
       setMode("verify");
     } catch (e) {
-      setError(e.message);
+      // Es zamanli cakisma son guvenceye (DB unique index) takilirsa
+      // GoTrue signup'i genelde 500/duplicate-benzeri bir hata dondurur;
+      // kullanici adiyla ilgili gorunuyorsa ayni anlasilir mesaji goster.
+      if (/handle|duplicate|unique/i.test(e.message || "")) {
+        setError("Bu kullanıcı adı kullanılıyor.");
+      } else {
+        setError(e.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -121,7 +142,15 @@ export function AuthScreen({ onDone, onGuest }) {
                 placeholder="kullaniciadi veya ornek@eposta.com"
               />
             ) : (
-              <TextField label="E-posta" type="email" value={identifier} onChange={(e) => setIdentifier(e.target.value)} placeholder="ornek@eposta.com" />
+              <>
+                <TextField label="E-posta" type="email" value={identifier} onChange={(e) => setIdentifier(e.target.value)} placeholder="ornek@eposta.com" />
+                <UsernameField
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="kullaniciadi"
+                  hint="Yalnızca harf, rakam ve alt çizgi (_) kullanılabilir, 3-20 karakter. Örn: ayse_yilmaz93. Başına @ yazmana gerek yok, otomatik eklenir."
+                />
+              </>
             )}
             <TextField label="Şifre" type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="En az 8 karakter" />
             <PrimaryButton type="submit" style={{ width: "100%", marginTop: 8 }} disabled={loading}>

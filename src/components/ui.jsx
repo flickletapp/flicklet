@@ -133,6 +133,56 @@ export function TextField({ label, type = "text", value, onChange, placeholder }
   );
 }
 
+// Kullanici adi alani: kullanici "@" YAZMAZ, arayuz gorsel olarak
+// solda sabit bir "@" gosterir (input value'suna dahil degil).
+export function UsernameField({ label = "Kullanıcı adı", value, onChange, placeholder, hint }) {
+  return (
+    <label style={{ display: "block", marginBottom: 16 }}>
+      <span style={{ fontFamily: FONT_BODY, fontSize: 13, fontWeight: 700, color: C.inkSoft }}>{label}</span>
+      <div style={{ position: "relative", marginTop: 6 }}>
+        <span
+          style={{
+            position: "absolute",
+            left: 14,
+            top: "50%",
+            transform: "translateY(-50%)",
+            fontFamily: FONT_BODY,
+            fontSize: 15,
+            color: C.inkSoft,
+            pointerEvents: "none",
+          }}
+        >
+          @
+        </span>
+        <input
+          type="text"
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          style={{
+            width: "100%",
+            boxSizing: "border-box",
+            padding: "12px 14px 12px 26px",
+            borderRadius: 12,
+            border: `2px solid ${C.line}`,
+            fontFamily: FONT_BODY,
+            fontSize: 15,
+            color: C.ink,
+            background: C.cream,
+            outline: "none",
+          }}
+        />
+      </div>
+      {hint && (
+        <div style={{ fontFamily: FONT_BODY, fontSize: 11.5, color: C.inkSoft, marginTop: 5, lineHeight: 1.4 }}>{hint}</div>
+      )}
+    </label>
+  );
+}
+
 export function TopBar({ title, onBack, right }) {
   return (
     <div
