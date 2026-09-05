@@ -28,7 +28,7 @@ const REFRESH_MARGIN_MS = IMAGE_PROACTIVE_REFRESH_MARGIN_MS;
 //     fallback'e geciliyor;
 //   - en fazla `maxRetries` kez img.onError ile dener, sonra sabit bir
 //     fallback'e duser (sonsuz donguye girmez).
-export function ResolvedImage({ path, kind = "post", session, userId, alt = "", style, fallback = null, maxRetries = 2 }) {
+export function ResolvedImage({ path, kind = "post", session, userId, alt = "", style, fallback, maxRetries = 2 }) {
   const [src, setSrc] = useState(null);
   const [failed, setFailed] = useState(false);
   const retriesRef = useRef(0);
@@ -120,7 +120,59 @@ export function ResolvedImage({ path, kind = "post", session, userId, alt = "", 
     load();
   };
 
-  if (!path || failed) return fallback;
+  const handleManualRetry = () => {
+    retriesRef.current = 0;
+    setFailed(false);
+    load();
+  };
+
+  if (!path) return fallback ?? null;
+  if (failed) {
+    // fallback ACIKCA verildiyse (ör. avatar cagrilarinda BlobAvatar)
+    // onu kullan; verilmediyse (cogu gonderi-gorseli cagrisi) kirik
+    // <img> simgesi yerine anlasilir bir Turkce durum + sinirli
+    // (elle tetiklenen, otomatik donguye girmeyen) yeniden deneme
+    // eylemi goster.
+    if (fallback !== undefined) return fallback;
+    return (
+      <div
+        style={{
+          ...style,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 6,
+          background: C.line + "55",
+          color: C.inkSoft,
+          fontFamily: FONT_BODY,
+          fontSize: 12,
+          textAlign: "center",
+          padding: 10,
+          boxSizing: "border-box",
+        }}
+      >
+        <span>Görsel yüklenemedi</span>
+        <button
+          type="button"
+          onClick={handleManualRetry}
+          style={{
+            fontFamily: FONT_BODY,
+            fontSize: 11.5,
+            fontWeight: 700,
+            color: C.pine,
+            background: "none",
+            border: "none",
+            textDecoration: "underline",
+            cursor: "pointer",
+            padding: 0,
+          }}
+        >
+          Tekrar dene
+        </button>
+      </div>
+    );
+  }
   if (!src) return null;
   return <img src={src} alt={alt} style={style} onError={handleError} />;
 }

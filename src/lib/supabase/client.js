@@ -439,7 +439,13 @@ async function signImagePath(path, accessToken, ttlSeconds) {
   if (!res.ok || !data.signedURL) {
     throw new Error(mapStorageError(data.message) || "Fotoğraf adresi alınamadı");
   }
-  return `${SUPABASE_URL}${data.signedURL}`;
+  // ONEMLI: data.signedURL "/storage/v1"E GORE GORECELI bir yol donuyor
+  // (ör. "/object/sign/post-images/..."), SUPABASE_URL KOKUNE GORE DEGIL.
+  // Onceki halde "/storage/v1" oneki eksikti - Storage sunucusu bu
+  // gecersiz yolu 404 "requested path is invalid" ile reddediyordu (bu
+  // durum staging'de gercek bir gonderiyle DOGRULANDI: sign istegi 200
+  // donuyordu ama indirme URL'i bu eksik onek yuzunden calismiyordu).
+  return `${SUPABASE_URL}/storage/v1${data.signedURL}`;
 }
 
 // path: DB'den gelen ham deger (bare path, eski tam URL veya dis URL
