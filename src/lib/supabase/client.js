@@ -7,6 +7,11 @@
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 export const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+// reconcile.js import.meta.env'e BAGIMLI DEGIL (kasitli - dogrudan
+// Node/ESM testlerinde de calisabilsin diye). Geriye donuk uyumluluk
+// icin buradan da disari aciliyor.
+export { isAmbiguousError, reconcilePostInsert, looksLikePriorAttemptMayHaveSucceeded } from "./reconcile.js";
+
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   throw new Error(
     "Yapılandırma hatası: VITE_SUPABASE_URL ve VITE_SUPABASE_PUBLISHABLE_KEY ortam değişkenleri tanımlı değil. " +
@@ -165,19 +170,35 @@ export async function supabaseGetUser(accessToken) {
   return res.json();
 }
 
+// isAmbiguousError artik reconcile.js'ten geliyor (yukarida re-export
+// edildi) - fetch() KENDISI hata firlatirsa (baglanti hic kurulamadi)
+// bu AG SEVIYESINDE bir hatadir: sunucunun istegi commit edip etmedigi
+// TAMAMEN belirsizdir. `networkError=true` ile isaretlenir.
 export async function supabaseInsert(table, accessToken, body) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${accessToken}`,
-      Prefer: "return=representation",
-    },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || "Kayıt eklenemedi");
+  let res;
+  try {
+    res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${accessToken}`,
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (networkErr) {
+    const e = new Error("Ağ hatası: sunucuya ulaşılamadı.");
+    e.networkError = true;
+    throw e;
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const e = new Error(data.message || "Kayıt eklenemedi");
+    e.code = data.code;
+    e.status = res.status;
+    throw e;
+  }
   return data;
 }
 
@@ -270,6 +291,53 @@ export async function supabaseRpc(fn, accessToken, params = {}) {
   return res.status === 204 ? null : res.json().catch(() => null);
 }
 
+// post-images bucket'i PRIVATE (bkz. 016_post_images_private_access) -
+// DB'ye artik TAM URL degil, BARE PATH yaziliyor. Gosterim aninda
+// resolveImageUrl() ile imzali URL alinir.
+const IMAGE_MIME_EXT = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif" };
+
+// Kullanicinin sectigi dosya adi HICBIR ZAMAN yol olarak kullanilmaz -
+// sadece MIME turunden turetilen sabit bir uzanti kullanilir.
+export function extensionForImageFile(file) {
+  return IMAGE_MIME_EXT[file?.type] || "jpg";
+}
+
+// Gonderi: <userId>/<attemptId>.<ext>  |  Avatar: avatars/<userId>/<attemptId>.<ext>
+// attemptId cagiran tarafta (CreatePost/Profile) OLUSTURULUP tekrar
+// denemeler arasinda SABIT tutulmali - boylece ayni yukleme/kayit
+// girisimi ayni path'i uretir ve belirsiz sonuc sonrasi guvenle
+// dogrulanabilir (bkz. CreatePost.jsx publish()).
+export function makeImagePath({ kind, userId, attemptId, file }) {
+  const ext = extensionForImageFile(file);
+  return kind === "avatar" ? `avatars/${userId}/${attemptId}.${ext}` : `${userId}/${attemptId}.${ext}`;
+}
+
+// Bilinen Storage hata metinlerini Turkce'ye cevirir. Taninmayan bir
+// hata icin null doner - cagiran genel bir fallback mesaj kullanmali.
+export function mapStorageError(rawMessage) {
+  const m = (rawMessage || "").toLowerCase();
+  if (m.includes("bucket not found")) return "Fotoğraf deposu şu an kullanılamıyor. Lütfen daha sonra tekrar dene.";
+  if (m.includes("exceeded the maximum allowed size") || m.includes("payload too large")) {
+    return "Fotoğraf çok büyük (en fazla 10MB olabilir). Lütfen daha küçük bir dosya seç.";
+  }
+  if (m.includes("mime type") && m.includes("not supported")) {
+    return "Bu dosya türü desteklenmiyor. Lütfen JPEG, PNG, WebP veya GIF seç.";
+  }
+  if (m.includes("not found")) return "Fotoğraf bulunamadı.";
+  if (m.includes("new row violates row-level security") || m.includes("unauthorized") || m.includes("permission denied")) {
+    return "Bu işlem için yetkin yok.";
+  }
+  return null;
+}
+
+// Yeniden deneme sirasinda AYNI path'e ikinci kez yukleme yapilirsa
+// Storage "The resource already exists" doner - bu GERCEK bir hata
+// DEGIL, ilk denemenin aslinda basarili oldugunun isareti (bkz.
+// CreatePost.jsx'teki belirsiz-sonuc kurtarma akisi).
+export function isAlreadyExistsError(message) {
+  return /already exists|duplicate/i.test(message || "");
+}
+
 export async function supabaseUploadImage(path, file, accessToken) {
   const res = await fetch(`${SUPABASE_URL}/storage/v1/object/post-images/${path}`, {
     method: "POST",
@@ -282,7 +350,139 @@ export async function supabaseUploadImage(path, file, accessToken) {
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error(data.message || "Fotoğraf yüklenemedi");
+    const raw = data.message || "";
+    const e = new Error(mapStorageError(raw) || "Fotoğraf yüklenemedi");
+    e.rawMessage = raw;
+    throw e;
   }
-  return `${SUPABASE_URL}/storage/v1/object/public/post-images/${path}`;
+  return path;
+}
+
+export async function supabaseDeleteImage(path, accessToken) {
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/post-images/${path}`, {
+    method: "DELETE",
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(mapStorageError(data.message) || "Fotoğraf silinemedi");
+  }
+}
+
+// ---------------------------------------------------------------------
+// Gorsel URL cozumleme - DB'de BARE PATH tutulur, gosterim aninda kisa
+// omurlu imzali URL alinir. Onbellek KULLANICI/OTURUM bazlidir; cikista
+// veya hesap degisiminde clearImageCache() cagrilmali (bkz. useAuth.js
+// handleLogout) - AKSI HALDE onceki hesabin imzali URL'leri yeni oturuma
+// sizabilir.
+// ---------------------------------------------------------------------
+const SIGN_TTL_SECONDS = { post: 300, avatar: 86400 }; // 5 dk / 24 saat
+let _imgCacheUserId = undefined;
+let _imgCache = new Map(); // path -> { url, expiresAt }
+let _imgInflight = new Map(); // path -> Promise<string>
+
+// ResolvedImage bilesenin (ui.jsx) suresi dolmadan ONCEDEN yenileme
+// zamanlayabilmesi icin gercek onbellek suresini disari acar.
+export function getCachedImageExpiry(path) {
+  return _imgCache.get(path)?.expiresAt ?? null;
+}
+
+export function clearImageCache() {
+  _imgCache = new Map();
+  _imgInflight = new Map();
+  _imgCacheUserId = undefined;
+}
+
+function ensureImageCacheScope(userId) {
+  if (_imgCacheUserId !== userId) {
+    _imgCache = new Map();
+    _imgInflight = new Map();
+    _imgCacheUserId = userId;
+  }
+}
+
+// KENDI bucket'imizin TAM public URL onekiyle basliyorsa (eski, henuz
+// migration 016'nin backfill'inden gecmemis bir kayit) bare path'e
+// cevrilir. ONEMLI: bu kontrol SADECE gercekten YAPILANDIRILMIS
+// SUPABASE_URL + tam bucket yolunu eslestirir - "herhangi bir
+// *.supabase.co" gibi genis bir kalip DEGIL. Baska bir Supabase
+// projesinin veya dis bir kaynagin URL'si (ornegin OAuth saglayicidan
+// gelen bir avatar) burada YANLISLIKLA bu projenin dosya yolu gibi
+// yorumlanmaz - oldugu gibi (externalUrl) dondurulur.
+const LEGACY_PUBLIC_PREFIX = `${SUPABASE_URL}/storage/v1/object/public/post-images/`;
+
+export function normalizeStoredImageValue(value) {
+  if (!value || typeof value !== "string") return null;
+  if (value.startsWith(LEGACY_PUBLIC_PREFIX)) {
+    return { path: value.slice(LEGACY_PUBLIC_PREFIX.length) };
+  }
+  if (/^https?:\/\//i.test(value)) {
+    return { externalUrl: value };
+  }
+  return { path: value };
+}
+
+async function signImagePath(path, accessToken, ttlSeconds) {
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/sign/post-images/${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${accessToken || SUPABASE_KEY}`,
+    },
+    body: JSON.stringify({ expiresIn: ttlSeconds }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.signedURL) {
+    throw new Error(mapStorageError(data.message) || "Fotoğraf adresi alınamadı");
+  }
+  return `${SUPABASE_URL}${data.signedURL}`;
+}
+
+// path: DB'den gelen ham deger (bare path, eski tam URL veya dis URL
+// olabilir). kind: "post" | "avatar" - sadece onbellek suresini secer,
+// GUVENLIK tamamen sunucu tarafi RLS'ten gelir (bkz. 016 migration).
+// ui.jsx'teki ResolvedImage, suresi dolmadan ONCEDEN (proaktif) yenileme
+// zamanlar - bu payin BU ONBELLEGIN "hala taze" kabul ettigi esikten
+// KUCUK olmasi ZORUNLU, aksi halde proaktif cagri "zaten taze" diye ayni
+// (suresi dolmak uzere olan) URL'i geri alir ve her seferinde ayni ana
+// yakin yeniden planlama yapar - pratikte sifir-gecikmeli bir donguye
+// donusur. Iki deger BURADAN turetilir, birbirinden BAGIMSIZ ikinci bir
+// sabit olarak ui.jsx'te TEKRAR TANIMLANMAZ.
+export const IMAGE_STALE_MARGIN_MS = 15_000; // onbellegin "taze" kabul esigi
+export const IMAGE_PROACTIVE_REFRESH_MARGIN_MS = 10_000; // ui.jsx bu kadar once yeniler (< STALE_MARGIN)
+
+// Ayni path icin AYNI ANDA birden fazla cagri gelirse (ör. ayni gonderi
+// birden fazla yerde render ediliyorsa) TEK bir imzalama istegi
+// paylasilir (istek birlestirme).
+export async function resolveImageUrl(rawValue, kind, accessToken, userId) {
+  const normalized = normalizeStoredImageValue(rawValue);
+  if (!normalized) return null;
+  if (normalized.externalUrl) return normalized.externalUrl;
+  const path = normalized.path;
+
+  ensureImageCacheScope(userId ?? null);
+
+  const now = Date.now();
+  const cached = _imgCache.get(path);
+  if (cached && cached.expiresAt - now > IMAGE_STALE_MARGIN_MS) return cached.url;
+
+  if (_imgInflight.has(path)) return _imgInflight.get(path);
+
+  const ttl = SIGN_TTL_SECONDS[kind] || SIGN_TTL_SECONDS.post;
+  const promise = signImagePath(path, accessToken, ttl)
+    .then((url) => {
+      _imgCache.set(path, { url, expiresAt: Date.now() + ttl * 1000 });
+      _imgInflight.delete(path);
+      return url;
+    })
+    .catch((e) => {
+      _imgInflight.delete(path);
+      throw e;
+    });
+  _imgInflight.set(path, promise);
+  return promise;
 }

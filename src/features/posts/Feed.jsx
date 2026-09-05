@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Heart, MessageCircle, Trophy, Flag, X, Search, Mail, Flame, Plus } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
-import { TopBar, BlobAvatar, PawBadge, LoadingState, EmptyState, ErrorBanner, TrendingSection, FlickletLogo } from "../../components/ui";
+import { TopBar, BlobAvatar, PawBadge, LoadingState, EmptyState, ErrorBanner, TrendingSection, FlickletLogo, ResolvedImage } from "../../components/ui";
 import { CommentsModal } from "../../components/modals";
 import { supabaseSelect, supabaseInsert, supabaseUpsert, supabaseDelete, supabaseCount, supabaseRpc } from "../../lib/supabase/client";
 import { useHumanFollow } from "../profiles/useHumanFollow";
@@ -247,7 +247,14 @@ export function PostCard({ post, session, userId, myName, onOpenComplaint, onOpe
       </div>
 
       {post.imageUrl && (
-        <img src={post.imageUrl} alt={post.caption} style={{ width: "100%", maxHeight: 420, objectFit: "contain", display: "block", background: C.paper }} />
+        <ResolvedImage
+          path={post.imageUrl}
+          kind="post"
+          session={session}
+          userId={userId}
+          alt={post.caption}
+          style={{ width: "100%", maxHeight: 420, objectFit: "contain", display: "block", background: C.paper }}
+        />
       )}
 
       <div style={{ padding: "12px 14px" }}>

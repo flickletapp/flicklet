@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../theme";
-import { BlobAvatar, PrimaryButton, LoadingState, EmptyState, ErrorBanner } from "./ui";
+import { BlobAvatar, PrimaryButton, LoadingState, EmptyState, ErrorBanner, ResolvedImage } from "./ui";
 import { supabaseSelect, supabaseInsert } from "../lib/supabase/client";
 
 // Telefonda alt sayfa (bottom-sheet), tablet/masaustunde (>=768px)
@@ -10,7 +10,7 @@ import { supabaseSelect, supabaseInsert } from "../lib/supabase/client";
 // sabit kalir, sadece liste alani kendi icinde kaydirilir. Disariya
 // tiklamak SADECE kendi icinde kaliyor (stopPropagation) - kapatmiyor
 // da, arkaya da sizmiyor; kapatmanin tek yolu X.
-export function FollowListModal({ title, list, loading, error, onClose, onOpenProfile }) {
+export function FollowListModal({ title, list, loading, error, onClose, onOpenProfile, session, userId }) {
   return (
     <div className="fl-modal-backdrop" style={{ background: "rgba(36,33,29,0.45)" }} onClick={(e) => e.stopPropagation()}>
       <div className="fl-modal-panel" onClick={(e) => e.stopPropagation()} style={{ background: C.paper }}>
@@ -35,11 +35,15 @@ export function FollowListModal({ title, list, loading, error, onClose, onOpenPr
                 }}
                 style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 4px", cursor: "pointer" }}
               >
-                {u.avatarUrl ? (
-                  <img src={u.avatarUrl} alt="" style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
-                ) : (
-                  <BlobAvatar emoji={u.petEmoji || "🙂"} color={u.color || C.pine} size={40} />
-                )}
+                <ResolvedImage
+                  path={u.avatarUrl}
+                  kind="avatar"
+                  session={session}
+                  userId={userId}
+                  alt=""
+                  style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
+                  fallback={<BlobAvatar emoji={u.petEmoji || "🙂"} color={u.color || C.pine} size={40} />}
+                />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontFamily: FONT_DISPLAY, fontSize: 13.5, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {u.human}

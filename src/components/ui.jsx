@@ -1,6 +1,129 @@
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, Home, Compass, Plus, Trophy, User } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../theme";
 import { TRENDING } from "../mockData";
+import { resolveImageUrl, getCachedImageExpiry, IMAGE_PROACTIVE_REFRESH_MARGIN_MS } from "../lib/supabase/client";
+
+// Bu pay client.js'ten geliyor ve KASITLI olarak resolveImageUrl'in kendi
+// onbellek-tazelik esiginden (IMAGE_STALE_MARGIN_MS) KUCUK - aksi halde
+// asagidaki proaktif cagri "zaten taze" sanilip ayni (suresi dolmak
+// uzere olan) URL'i geri alir ve sifir-gecikmeli bir yeniden deneme
+// donguesune donusur (bkz. client.js'teki aciklama).
+const REFRESH_MARGIN_MS = IMAGE_PROACTIVE_REFRESH_MARGIN_MS;
+
+// Ortak gorsel cozumleme katmani - TUM ekranlar image_url/avatar_url'i
+// DOGRUDAN <img src> olarak KULLANMAMALI (bkz. 016_post_images_private_access
+// migration - bucket private, DB'de bare path tutuluyor). Bu bilesen:
+//   - path'i imzali URL'e cozer (resolveImageUrl - istek birlestirme ve
+//     kullanici-bazli onbellek ORADA yapiliyor, burada tekrarlanmiyor);
+//   - GORUNUR haldeyken suresi dolmadan ONCEDEN kendini yeniler (sadece
+//     img.onError'a guvenmez - onError ancak tarayici gercekten yuklemeyi
+//     DENEYIP basarisiz oldugunda tetiklenir, bu da kullaniciya kirik
+//     gorsel gostermek anlamina gelebilir);
+//   - sekme arka plandan one geldiginde (visibilitychange) suresi kontrol
+//     edip gerekirse yeniler;
+//   - bilesen kaldirildiginda TUM zamanlayicilari/listener'lari temizler;
+//   - erisim REDDEDILIRSE (resolve reddi - ör. engellenme/gizlilik
+//     degisikligi) eski gorseli EKRANDA BIRAKMAZ - src hemen temizlenip
+//     fallback'e geciliyor;
+//   - en fazla `maxRetries` kez img.onError ile dener, sonra sabit bir
+//     fallback'e duser (sonsuz donguye girmez).
+export function ResolvedImage({ path, kind = "post", session, userId, alt = "", style, fallback = null, maxRetries = 2 }) {
+  const [src, setSrc] = useState(null);
+  const [failed, setFailed] = useState(false);
+  const retriesRef = useRef(0);
+  const refreshTimerRef = useRef(null);
+  const mountedRef = useRef(true);
+  const accessToken = session?.access_token;
+
+  const clearRefreshTimer = () => {
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
+  };
+
+  const scheduleProactiveRefresh = useCallback(
+    (forPath) => {
+      clearRefreshTimer();
+      const expiresAt = getCachedImageExpiry(forPath);
+      if (!expiresAt) return;
+      const delay = Math.max(expiresAt - Date.now() - REFRESH_MARGIN_MS, 1000);
+      refreshTimerRef.current = setTimeout(() => {
+        if (mountedRef.current) load();
+      }, delay);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  const load = useCallback(() => {
+    if (!path) {
+      setSrc(null);
+      setFailed(false);
+      return;
+    }
+    resolveImageUrl(path, kind, accessToken, userId)
+      .then((url) => {
+        if (!mountedRef.current) return;
+        setSrc(url);
+        setFailed(false);
+        scheduleProactiveRefresh(path);
+      })
+      .catch(() => {
+        if (!mountedRef.current) return;
+        // Erisim reddedildi/hata olustu - ESKI gorseli EKRANDA BIRAKMA,
+        // uygun bos/hata durumuna gec.
+        setSrc(null);
+        setFailed(true);
+        clearRefreshTimer();
+      });
+  }, [path, kind, accessToken, userId, scheduleProactiveRefresh]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    retriesRef.current = 0;
+    setFailed(false);
+    load();
+    return () => {
+      mountedRef.current = false;
+      clearRefreshTimer();
+    };
+  }, [load]);
+
+  // Sekme arka plandan one geldiginde suresi dolmus/dolmak uzere olan
+  // gorselleri yenile - sadece zamanlayiciya guvenme (arka plandayken
+  // setTimeout duraklatilmis/gecikmis olabilir).
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible" || !path) return;
+      const expiresAt = getCachedImageExpiry(path);
+      if (!expiresAt || expiresAt - Date.now() < REFRESH_MARGIN_MS) {
+        load();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [path, load]);
+
+  const handleError = () => {
+    if (retriesRef.current >= maxRetries) {
+      setSrc(null);
+      setFailed(true);
+      return;
+    }
+    retriesRef.current += 1;
+    load();
+  };
+
+  if (!path || failed) return fallback;
+  if (!src) return null;
+  return <img src={src} alt={alt} style={style} onError={handleError} />;
+}
 
 // Ekranlarda tekrarlanan yükleniyor/boş/hata durumları için ortak bileşenler.
 export function LoadingState({ padding = "30px 0" }) {

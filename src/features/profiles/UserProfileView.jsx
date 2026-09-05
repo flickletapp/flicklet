@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Mail, X } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
-import { TopBar, BlobAvatar, ErrorBanner } from "../../components/ui";
+import { TopBar, BlobAvatar, ErrorBanner, ResolvedImage } from "../../components/ui";
 import { FollowListModal } from "../../components/modals";
 import { supabaseCount, supabaseSelect, supabaseDelete, supabaseRpc } from "../../lib/supabase/client";
 import { useHumanFollow } from "./useHumanFollow";
@@ -232,11 +232,15 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
       <div className="fl-col" style={{ padding: "20px 18px 40px" }}>
         {blockError && <ErrorBanner style={{ marginBottom: 14 }}>{blockError}</ErrorBanner>}
         <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 18 }}>
-          {profile?.avatar_url ? (
-            <img src={profile.avatar_url} alt="" style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
-          ) : (
-            <BlobAvatar emoji={target.petEmoji} size={64} color={C.mustard} />
-          )}
+          <ResolvedImage
+            path={profile?.avatar_url}
+            kind="avatar"
+            session={session}
+            userId={userId}
+            alt=""
+            style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
+            fallback={<BlobAvatar emoji={target.petEmoji} size={64} color={C.mustard} />}
+          />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontFamily: FONT_DISPLAY, fontSize: 18, color: C.ink }}>{displayName}</div>
             {displayHandle && <div style={{ fontFamily: FONT_BODY, fontSize: 12.5, color: C.inkSoft }}>{displayHandle}</div>}
@@ -312,6 +316,8 @@ export function UserProfileView({ target, session, userId, onBack, onOpenProfile
           list={followListData}
           loading={followListLoading}
           error={followListError}
+          session={session}
+          userId={userId}
           onClose={() => setListOpen(null)}
           onOpenProfile={(u) => {
             setListOpen(null);

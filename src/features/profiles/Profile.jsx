@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Lock, Globe, Plus, Camera, LogOut, X, Heart, MessageCircle, Ban, ChevronRight, User as UserIcon } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
-import { TopBar, BlobAvatar, EmptyState, ErrorBanner, TextField, UsernameField } from "../../components/ui";
+import { TopBar, BlobAvatar, EmptyState, ErrorBanner, TextField, UsernameField, ResolvedImage } from "../../components/ui";
 import { FollowListModal } from "../../components/modals";
 import {
   supabaseUpdate,
@@ -13,6 +13,8 @@ import {
   supabaseDelete,
   validateUsername,
   mapUsernameDbError,
+  makeImagePath,
+  mapStorageError,
 } from "../../lib/supabase/client";
 import { fetchFollowList } from "./followList";
 
@@ -29,6 +31,8 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
   const [myPosts, setMyPosts] = useState([]);
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
+  const avatarAttemptIdRef = useRef(null);
   const [handle, setHandle] = useState("");
   const [bio, setBio] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -243,14 +247,23 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
   const handleAvatarChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file || !userId) return;
+    setAvatarError("");
     setUploadingAvatar(true);
+    // Her yeni dosya secimi YENI bir deneme kimligi alir - onceki
+    // basarisiz denemenin path'i tekrar kullanilmaz.
+    avatarAttemptIdRef.current = crypto.randomUUID();
     try {
-      const path = `avatars/${userId}/${Date.now()}-${file.name}`;
-      const url = await supabaseUploadImage(path, file, session.access_token);
-      await supabaseUpdate("profiles", session.access_token, `id=eq.${userId}`, { avatar_url: url });
-      setAvatarUrl(url);
-    } catch (e) {
-      // sessiz geç
+      const path = makeImagePath({ kind: "avatar", userId, attemptId: avatarAttemptIdRef.current, file });
+      await supabaseUploadImage(path, file, session.access_token);
+      // Profil satiri KESINLESMEDEN eski avatar'a DOKUNULMUYOR - guncelleme
+      // basarisiz olursa mevcut avatar oldugu gibi kalir (asagidaki catch).
+      await supabaseUpdate("profiles", session.access_token, `id=eq.${userId}`, { avatar_url: path });
+      setAvatarUrl(path);
+      avatarAttemptIdRef.current = null;
+      // Not: eski avatar dosyasi BILINCLI olarak silinmiyor (bu turun
+      // kapsami disi - onaylanmadi). Depoda birikir, ayri bir is.
+    } catch (err) {
+      setAvatarError(mapStorageError(err.rawMessage || err.message) || err.message || "Profil fotoğrafı güncellenemedi.");
     } finally {
       setUploadingAvatar(false);
     }
@@ -343,18 +356,19 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
         }
       />
       <div className="fl-col" style={{ padding: "20px 18px 90px" }}>
+        {avatarError && <ErrorBanner style={{ marginBottom: 12 }}>{avatarError}</ErrorBanner>}
         <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 20 }}>
           <input ref={avatarInputRef} type="file" accept="image/*" onChange={handleAvatarChange} style={{ display: "none" }} />
           <div onClick={() => avatarInputRef.current?.click()} style={{ position: "relative", cursor: "pointer", flexShrink: 0 }}>
-            {avatarUrl ? (
-              <img
-                src={avatarUrl}
-                alt="Profil fotoğrafı"
-                style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", border: `2px solid ${C.pine}`, display: "block" }}
-              />
-            ) : (
-              <BlobAvatar emoji="🙂" size={64} color={C.pine} />
-            )}
+            <ResolvedImage
+              path={avatarUrl}
+              kind="avatar"
+              session={session}
+              userId={userId}
+              alt="Profil fotoğrafı"
+              style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", border: `2px solid ${C.pine}`, display: "block" }}
+              fallback={<BlobAvatar emoji="🙂" size={64} color={C.pine} />}
+            />
             <div
               style={{
                 position: "absolute",
@@ -398,11 +412,15 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
                 key={r.id}
                 style={{ display: "flex", alignItems: "center", gap: 10, background: C.cream, border: `1px solid ${C.line}`, borderRadius: 14, padding: "10px 12px", marginBottom: 8 }}
               >
-                {r.profiles?.avatar_url ? (
-                  <img src={r.profiles.avatar_url} alt="" style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} />
-                ) : (
-                  <BlobAvatar emoji="🙂" size={40} color={C.pine} />
-                )}
+                <ResolvedImage
+                  path={r.profiles?.avatar_url}
+                  kind="avatar"
+                  session={session}
+                  userId={userId}
+                  alt=""
+                  style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }}
+                  fallback={<BlobAvatar emoji="🙂" size={40} color={C.pine} />}
+                />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   {r.pet_id ? (
                     <div style={{ fontFamily: FONT_DISPLAY, fontSize: 13.5, color: C.ink }}>
@@ -580,8 +598,11 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
                     // objectFit "contain" - goruntu kirpilmiyor, gerekirse
                     // C.paper zeminle bosluklu gosteriliyor. Sadece kompakt
                     // kart baglaminda maxHeight dusuruldu, mantik ayni.
-                    <img
-                      src={p.imageUrl}
+                    <ResolvedImage
+                      path={p.imageUrl}
+                      kind="post"
+                      session={session}
+                      userId={userId}
                       alt={p.caption}
                       style={{ width: "100%", maxHeight: 320, objectFit: "contain", borderRadius: 12, display: "block", marginBottom: 10, background: C.paper }}
                     />
@@ -645,6 +666,8 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
           list={followListData}
           loading={followListLoading}
           error={followListError}
+          session={session}
+          userId={userId}
           onClose={() => setListOpen(null)}
           onOpenProfile={(u) => {
             setListOpen(null);
@@ -859,11 +882,15 @@ export function ProfileScreen({ session, userId, user, myPets, isPrivate, setIsP
                   key={b.blocked_id}
                   style={{ display: "flex", alignItems: "center", gap: 10, background: C.cream, border: `1px solid ${C.line}`, borderRadius: 14, padding: "10px 12px", marginBottom: 8 }}
                 >
-                  {b.profiles?.avatar_url ? (
-                    <img src={b.profiles.avatar_url} alt="" style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover" }} />
-                  ) : (
-                    <BlobAvatar emoji="🙂" size={36} color={C.inkSoft} />
-                  )}
+                  <ResolvedImage
+                    path={b.profiles?.avatar_url}
+                    kind="avatar"
+                    session={session}
+                    userId={userId}
+                    alt=""
+                    style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover" }}
+                    fallback={<BlobAvatar emoji="🙂" size={36} color={C.inkSoft} />}
+                  />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontFamily: FONT_DISPLAY, fontSize: 13.5, color: C.ink }}>{b.profiles?.display_name || "Kullanıcı"}</div>
                     {b.profiles?.handle && <div style={{ fontFamily: FONT_BODY, fontSize: 11.5, color: C.inkSoft }}>{b.profiles.handle}</div>}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Heart, Search as SearchIcon } from "lucide-react";
 import { C, FONT_DISPLAY, FONT_BODY } from "../../theme";
-import { TopBar, LoadingState, EmptyState, BlobAvatar } from "../../components/ui";
+import { TopBar, LoadingState, EmptyState, BlobAvatar, ResolvedImage } from "../../components/ui";
 import { CATEGORIES } from "../../mockData";
 import { loadFeed, PostCard } from "./Feed";
 import { searchUsers } from "../profiles/Search";
@@ -138,7 +138,14 @@ export function DiscoverScreen({ session, userId, myName, onOpenProfile, onOpenC
                 onClick={() => setOpenPost(p)}
                 style={{ position: "relative", aspectRatio: "1 / 1", borderRadius: 12, overflow: "hidden", cursor: "pointer" }}
               >
-                <img src={p.imageUrl} alt={p.caption} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <ResolvedImage
+                  path={p.imageUrl}
+                  kind="post"
+                  session={session}
+                  userId={userId}
+                  alt={p.caption}
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
                 {p.contest && <div style={{ position: "absolute", top: 5, right: 5, fontSize: 13 }}>🏆</div>}
                 <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "linear-gradient(transparent, rgba(0,0,0,0.45))", padding: "16px 6px 5px", display: "flex", alignItems: "center", gap: 3 }}>
                   <Heart size={10} color="#fff" fill="#fff" />

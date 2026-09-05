@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabaseGetUser, supabaseSelect } from "../../lib/supabase/client";
+import { supabaseGetUser, supabaseSelect, clearImageCache } from "../../lib/supabase/client";
 
 const SESSION_KEY = "flicklet_session";
 
@@ -72,6 +72,8 @@ export function useAuth() {
     setMyPets([]);
     setIsGuest(false);
     setPhase("auth");
+    // Onceki hesabin imzali gorsel URL'leri yeni oturuma/hesaba SIZMASIN.
+    clearImageCache();
   };
 
   const enterGuestMode = () => {
